@@ -1,5 +1,6 @@
 package com.sidequest.sidequest.service;
 
+import com.sidequest.sidequest.dto.AppUserRequestDTO;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import org.springframework.stereotype.Service;
@@ -24,5 +25,13 @@ public class AppUserService {
 
     public void deleteUser(Long id) {
         appUserRepository.deleteById(id);
+    }
+
+    public AppUser updateAppUser(Long id, AppUserRequestDTO dto) {
+        AppUser appUser = appUserRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException(String.format("AppUser not found with id %s", id)));
+        appUser.setUsername(dto.getUsername());
+        appUser.setEmail(dto.getEmail());
+        return appUserRepository.save(appUser);
     }
 }

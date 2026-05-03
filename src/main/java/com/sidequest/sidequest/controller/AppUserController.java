@@ -38,4 +38,10 @@ public class AppUserController {
     public void deleteAppUser(@PathVariable long id) {
         appUserService.deleteUser(id);
     }
+
+    @PutMapping("/{id}")
+    public AppUserResponseDTO updateAppUser(@PathVariable long id, @Valid @RequestBody AppUserRequestDTO dto) {
+        AppUser appUser = appUserService.updateAppUser(id, dto);
+        return appUserMgr.toDto(appUser);
+    }
 }

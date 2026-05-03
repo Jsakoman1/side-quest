@@ -20,11 +20,50 @@ const createAppUser = async () => {
     email: email.value,
     username: username.value
   })
-
   // reset inputs and refresh
   email.value = ''
   username.value = ''
   await fetchAppUsers()
+}
+
+const deleteAppUser = async (id) => {
+  await axios.delete(`http://localhost:8080/app_users/${id}`)
+  // refresh
+  await fetchAppUsers()
+}
+
+// helper confirmDelete
+const handleDelete = async (id) => {
+  if (confirm('Delete AppUser?'))
+    return await deleteAppUser(id)
+}
+
+// EditMode
+const editingAppUserId = ref(null)
+const editAppUserEmail = ref('')
+const editAppUserUsername = ref('')
+
+const startEdit = (appUser) => {
+  editingAppUserId.value = appUser.id
+  editAppUserEmail.value = appUser.email
+  editAppUserUsername.value = appUser.username
+}
+
+const updateAppUser = async () => {
+  await axios.put(`http://localhost:8080/app_users/${editingAppUserId.value}`, {
+    email: editAppUserEmail.value,
+    username: editAppUserUsername.value,
+  })
+
+  // reset fields and refresh
+  editingAppUserId.value = null
+  editAppUserEmail.value = ''
+  editAppUserUsername.value = ''
+  await fetchAppUsers()
+}
+
+const cancelEdit = () => {
+  editingAppUserId.value = null
 }
 
 onMounted(() => {
@@ -46,7 +85,22 @@ onMounted(() => {
 
     <!-- LIST APP USERS -->
     <div v-for="appUser in appUsers" :key="appUser.id">
-      {{ appUser.id }} - {{ appUser.email }} - {{ appUser.username }}
+
+      <!-- NORMAL VIEW -->
+      <div v-if="editingAppUserId !== appUser.id">
+        {{ appUser.id }} - {{ appUser.email }} - {{ appUser.username }}
+        <button @click="startEdit(appUser)">Edit</button>
+        <button @click="handleDelete(appUser.id)">Delete AppUser</button>
+      </div>
+
+      <!-- EDIT MODE -->
+      <div v-else>
+        <input v-model="editAppUserEmail"/>
+        <input v-model="editAppUserUsername"/>
+
+        <button @click="updateAppUser">Save</button>
+        <button @click="cancelEdit">Cancel</button>
+      </div>
     </div>
   </div>
 </template>
