@@ -2,18 +2,51 @@
 import {onMounted, ref} from 'vue'
 import axios from 'axios'
 
-const users = ref([])
+const appUsers = ref([])
 
-onMounted(async () => {
+// Form
+const email = ref('')
+const username = ref('')
+
+// FETCH USERS
+const fetchAppUsers = async () => {
   const res = await axios.get('http://localhost:8080/app_users')
-  users.value = res.data
+  appUsers.value = res.data
+}
+
+// CREATE APP USER
+const createAppUser = async () => {
+  await axios.post('http://localhost:8080/app_users', {
+    email: email.value,
+    username: username.value
+  })
+
+  // reset inputs and refresh
+  email.value = ''
+  username.value = ''
+  await fetchAppUsers()
+}
+
+onMounted(() => {
+  fetchAppUsers()
 })
 </script>
 
 <template>
   <div>
-    <h1>Users</h1>
+    <h1>App Users</h1>
 
-    <div v-for="user in users" :key="user.id"> {{ user.id }} - {{ user.email }} - {{ user.username }}</div>
+    <!-- CREATE APP USER FORM -->
+    <div style="margin-bottom: 20px">
+      <input v-model="email" placeholder="email"/>
+      <input v-model="username" placeholder="username"/>
+
+      <button @click="createAppUser">Create AppUser</button>
+    </div>
+
+    <!-- LIST APP USERS -->
+    <div v-for="appUser in appUsers" :key="appUser.id">
+      {{ appUser.id }} - {{ appUser.email }} - {{ appUser.username }}
+    </div>
   </div>
 </template>
