@@ -32,4 +32,9 @@ public class AppUserController {
                 .map(appUserMgr::toDto)
                 .toList();
     }
+
+    @DeleteMapping("/{id}")
+    public void deleteAppUser(@PathVariable long id) {
+        appUserService.deleteUser(id);
+    }
 }

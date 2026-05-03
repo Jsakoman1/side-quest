@@ -21,4 +21,8 @@ public class AppUserService {
     public List<AppUser> getAllAppUsers() {
         return appUserRepository.findAll();
     }
+
+    public void deleteUser(Long id) {
+        appUserRepository.deleteById(id);
+    }
 }
