@@ -1,7 +1,7 @@
 <template>
   <div>
     <nav style="margin-bottom: 20px">
-      <a href="/">Users</a>
+      <a href="/">AppUsers</a>
     </nav>
 
     <router-view/>
