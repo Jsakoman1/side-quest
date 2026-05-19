@@ -1,8 +1,14 @@
-<script setup>
+<script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import axios from 'axios'
 
-const appUsers = ref([])
+interface AppUser {
+  id: number
+  email: string
+  username: string
+}
+
+const appUsers = ref<AppUser[]>([])
 
 // Form
 const email = ref('')
@@ -10,7 +16,7 @@ const username = ref('')
 
 // FETCH USERS
 const fetchAppUsers = async () => {
-  const res = await axios.get('http://localhost:8080/app_users')
+  const res = await axios.get<AppUser[]>('http://localhost:8080/app_users')
   appUsers.value = res.data
 }
 
@@ -26,30 +32,33 @@ const createAppUser = async () => {
   await fetchAppUsers()
 }
 
-const deleteAppUser = async (id) => {
+const deleteAppUser = async (id: number) => {
   await axios.delete(`http://localhost:8080/app_users/${id}`)
   // refresh
   await fetchAppUsers()
 }
 
 // helper confirmDelete
-const handleDelete = async (id) => {
+const handleDelete = async (id: number) => {
   if (confirm('Delete AppUser?'))
     return await deleteAppUser(id)
 }
 
 // EditMode
-const editingAppUserId = ref(null)
+const editingAppUserId = ref<number | null>(null)
 const editAppUserEmail = ref('')
 const editAppUserUsername = ref('')
 
-const startEdit = (appUser) => {
+const startEdit = (appUser: AppUser) => {
   editingAppUserId.value = appUser.id
   editAppUserEmail.value = appUser.email
   editAppUserUsername.value = appUser.username
 }
 
 const updateAppUser = async () => {
+  if (editingAppUserId.value === null) {
+    return
+  }
   await axios.put(`http://localhost:8080/app_users/${editingAppUserId.value}`, {
     email: editAppUserEmail.value,
     username: editAppUserUsername.value,
