@@ -1,7 +1,8 @@
 <template>
   <div>
     <nav style="margin-bottom: 20px">
-      <a href="/">AppUsers</a>
+      <RouterLink to="/">AppUsers</RouterLink>
+      <RouterLink to="/quests">Quests</RouterLink>
     </nav>
 
     <router-view/>
