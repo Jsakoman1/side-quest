@@ -9,12 +9,17 @@ import lombok.Setter;
 @Entity
 @Table(name = "app_user")
 public class AppUser {
+
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true)
+    @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(nullable = false)
     private String username;
+
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
 }
