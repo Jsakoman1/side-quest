@@ -8,6 +8,7 @@ import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -56,5 +57,15 @@ public class AuthController {
                 appUser.getEmail(),
                 appUser.getUsername(),
                 jwtService.generateToken(appUser));
+    }
+
+    @GetMapping("/me")
+    public AuthResponse me(Authentication authentication) {
+        AppUser appUser = (AppUser) authentication.getPrincipal();
+        return new AuthResponse(
+                appUser.getId(),
+                appUser.getEmail(),
+                appUser.getUsername(),
+                null); // for auth/me we do not need to return token
     }
 }
