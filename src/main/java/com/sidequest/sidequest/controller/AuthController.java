@@ -5,6 +5,7 @@ import com.sidequest.sidequest.dto.auth.LoginRequest;
 import com.sidequest.sidequest.dto.auth.RegisterRequest;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.repository.AppUserRepository;
+import com.sidequest.sidequest.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +20,7 @@ public class AuthController {
 
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
     @PostMapping("/register")
     public AuthResponse register(@RequestBody RegisterRequest registerRequest) {
@@ -36,7 +38,8 @@ public class AuthController {
         return new AuthResponse(
                 savedAppUser.getId(),
                 savedAppUser.getEmail(),
-                savedAppUser.getUsername());
+                savedAppUser.getUsername(),
+                jwtService.generateToken(savedAppUser));
     }
 
     @PostMapping("/login")
@@ -51,7 +54,7 @@ public class AuthController {
         return new AuthResponse(
                 appUser.getId(),
                 appUser.getEmail(),
-                appUser.getUsername()
-        );
+                appUser.getUsername(),
+                jwtService.generateToken(appUser));
     }
 }
