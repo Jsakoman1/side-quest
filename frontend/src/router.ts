@@ -1,5 +1,6 @@
 import {createRouter, createWebHistory} from "vue-router";
 import QuestsPage from "./pages/QuestsPage.vue";
+import QuestDetailView from "./views/QuestDetailView.vue";
 import LoginView from "./views/LoginView.vue";
 import RegisterView from "./views/RegisterView.vue";
 import {isLoggedIn} from "./auth.ts";
@@ -21,6 +22,11 @@ const routes = [
     {
         path: '/quests',
         component: QuestsPage,
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/quests/:id',
+        component: QuestDetailView,
         meta: {requiresAuth: true}
     }
 ];

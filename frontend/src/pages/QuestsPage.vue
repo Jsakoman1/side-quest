@@ -108,6 +108,36 @@ const refreshApplicationsForQuest = async (questId: number) => {
   applicationsByQuestId.value[questId] = res.data
 }
 
+const acceptApplication = async (questId: number, applicationId: number) => {
+  await axios.patch(`http://localhost:8080/quests/${questId}/applications/${applicationId}/accept`, {}, {
+    headers: authHeader()
+  })
+  await refreshApplicationsForQuest(questId)
+  await fetchQuests()
+}
+
+const rejectApplication = async (questId: number, applicationId: number) => {
+  await axios.patch(`http://localhost:8080/quests/${questId}/applications/${applicationId}/reject`, {}, {
+    headers: authHeader()
+  })
+  await refreshApplicationsForQuest(questId)
+  await fetchQuests()
+}
+
+const startQuest = async (questId: number) => {
+  await axios.patch(`http://localhost:8080/quests/${questId}/start`, {}, {
+    headers: authHeader()
+  })
+  await fetchQuests()
+}
+
+const completeQuest = async (questId: number) => {
+  await axios.patch(`http://localhost:8080/quests/${questId}/complete`, {}, {
+    headers: authHeader()
+  })
+  await fetchQuests()
+}
+
 onMounted(() => {
   fetchQuests()
 })
@@ -129,7 +159,9 @@ onMounted(() => {
     <!-- LIST QUESTS -->
     <div v-for="quest in quests" :key="quest.id" style="border: 1px solid #ccc; padding: 12px; margin-bottom: 12px">
       <div>
-        <strong>{{ quest.id }} - {{ quest.title }} </strong>
+        <RouterLink :to="`/quests/${quest.id}`">
+          <strong>{{ quest.id }} - {{ quest.title }}</strong>
+        </RouterLink>
       </div>
       <div>
         {{ quest.description }}
@@ -142,6 +174,10 @@ onMounted(() => {
       </div>
       <div>
         Creator: {{ quest.creatorUsername }}
+      </div>
+      <div v-if="currentUser && quest.creatorId === currentUser.id" style="margin-top: 8px">
+        <button v-if="quest.status === 'ASSIGNED'" @click="startQuest(quest.id)">Start</button>
+        <button v-if="quest.status === 'IN_PROGRESS'" @click="completeQuest(quest.id)">Complete</button>
       </div>
       <hr/>
 
@@ -166,6 +202,8 @@ onMounted(() => {
           <div>Message: {{ application.message }}</div>
           <div>Proposed Price: {{ application.proposedPrice }}</div>
           <div>Status: {{ application.status }}</div>
+          <button @click="acceptApplication(quest.id, application.id)">Accept</button>
+          <button @click="rejectApplication(quest.id, application.id)">Reject</button>
         </div>
       </div>
       <div>
