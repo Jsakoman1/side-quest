@@ -1,6 +1,5 @@
 package com.sidequest.sidequest.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -12,8 +11,6 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class QuestApplicationRequestDTO {
 
-    @NotNull
-    private long applicantId;
     private String message;
     private BigDecimal proposedPrice;
 }
