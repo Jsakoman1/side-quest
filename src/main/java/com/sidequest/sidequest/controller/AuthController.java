@@ -4,6 +4,7 @@ import com.sidequest.sidequest.dto.auth.AuthResponse;
 import com.sidequest.sidequest.dto.auth.LoginRequest;
 import com.sidequest.sidequest.dto.auth.RegisterRequest;
 import com.sidequest.sidequest.model.AppUser;
+import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class AuthController {
         appUser.setEmail(registerRequest.email());
         appUser.setUsername(registerRequest.username());
         appUser.setPasswordHash(passwordEncoder.encode(registerRequest.password()));
+        appUser.setRole(AppUserRole.USER);
 
         AppUser savedAppUser = appUserRepository.save(appUser);
 
@@ -40,6 +42,7 @@ public class AuthController {
                 savedAppUser.getId(),
                 savedAppUser.getEmail(),
                 savedAppUser.getUsername(),
+                savedAppUser.getRole() == null ? AppUserRole.USER.name() : savedAppUser.getRole().name(),
                 jwtService.generateToken(savedAppUser));
     }
 
@@ -56,6 +59,7 @@ public class AuthController {
                 appUser.getId(),
                 appUser.getEmail(),
                 appUser.getUsername(),
+                appUser.getRole() == null ? AppUserRole.USER.name() : appUser.getRole().name(),
                 jwtService.generateToken(appUser));
     }
 
@@ -66,6 +70,7 @@ public class AuthController {
                 appUser.getId(),
                 appUser.getEmail(),
                 appUser.getUsername(),
+                appUser.getRole() == null ? AppUserRole.USER.name() : appUser.getRole().name(),
                 null); // for auth/me we do not need to return token
     }
 }

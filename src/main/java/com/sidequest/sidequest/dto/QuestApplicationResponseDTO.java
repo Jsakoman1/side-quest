@@ -17,6 +17,7 @@ public class QuestApplicationResponseDTO {
 
     private Long questId;
     private String questTitle;
+    private String questDescription;
 
     private Long applicantId;
     private String applicantUsername;

@@ -1,175 +1,125 @@
 <script setup lang="ts">
+import {onMounted} from "vue"
+import {useRouter} from "vue-router"
+import DashboardAdmin from "../components/dashboard/DashboardAdmin.vue"
+import DashboardFindQuests from "../components/dashboard/DashboardFindQuests.vue"
+import DashboardHeader from "../components/dashboard/DashboardHeader.vue"
+import DashboardMyApplications from "../components/dashboard/DashboardMyApplications.vue"
+import DashboardMyQuests from "../components/dashboard/DashboardMyQuests.vue"
+import DashboardOverview from "../components/dashboard/DashboardOverview.vue"
+import DashboardPostWork from "../components/dashboard/DashboardPostWork.vue"
+import DashboardProfile from "../components/dashboard/DashboardProfile.vue"
+import DashboardSidebar from "../components/dashboard/DashboardSidebar.vue"
+import UiDialog from "../components/ui/UiDialog.vue"
+import {logoutUser} from "../auth.ts"
+import {useQuestDashboard} from "../composables/useQuestDashboard.ts"
 
-import {onMounted, ref} from "vue";
-import axios from "axios";
-import {authHeader, currentUser} from "../auth.ts";
+const dashboard = useQuestDashboard()
+const router = useRouter()
 
-interface Quest {
-  id: number
-  creatorId: number
-  creatorUsername: string
-  title: string
-  description: string
-  awardAmount: number
-  status: string
+const handleLogout = () => {
+  logoutUser()
+  router.push("/login")
 }
 
-interface QuestApplication {
-  id: number
-  questId: number
-  questTitle: string
-  applicantId: number
-  applicantUsername: string
-  message: string
-  proposedPrice: number
-  status: string
-  createdAt: string
-}
-
-const quests = ref<Quest[]>([])
-
-// Form fields
-const title = ref('')
-const description = ref('')
-const awardAmount = ref('')
-
-// Form Applications
-const applicationMessages = ref<Record<number, string>>({})
-const proposedPrices = ref<Record<number, string>>({})
-const applicationsByQuestId = ref<Record<number, QuestApplication[]>>({})
-const openApplicationsQuestIds = ref<Record<number, boolean>>({})
-
-// FETCH QUESTS
-const fetchQuests = async () => {
-  const res = await axios.get<Quest[]>('http://localhost:8080/quests', {
-    headers: authHeader()
-  })
-  quests.value = res.data
-}
-
-// CREATE QUEST
-const createQuest = async () => {
-  if (!currentUser.value) {
-    alert('You must be logged in')
-    return
-  }
-
-  await axios.post('http://localhost:8080/quests', {
-    title: title.value,
-    description: description.value,
-    awardAmount: Number(awardAmount.value)
-  }, {
-    headers: authHeader()
-  })
-
-  // reset inputs and refresh
-  title.value = ''
-  description.value = ''
-  awardAmount.value = ''
-  await fetchQuests()
-}
-
-// SHOW QUEST APPLICATIONS
-const toggleApplicationsForQuest = async (questId: number) => {
-  if (openApplicationsQuestIds.value[questId]) {
-    openApplicationsQuestIds.value[questId] = false
-    return
-  }
-
-  await refreshApplicationsForQuest(questId)
-  openApplicationsQuestIds.value[questId] = true
-}
-
-// APPLY FOR QUEST
-const applyForQuest = async (questId: number) => {
-  if (!currentUser.value) {
-    alert('You must be logged in')
-    return
-  }
-
-  await axios.post(`http://localhost:8080/quests/${questId}/applications`, {
-    message: applicationMessages.value[questId] ?? '',
-    proposedPrice: Number(proposedPrices.value[questId] ?? 0)
-  }, {
-    headers: authHeader()
-  })
-
-  applicationMessages.value[questId] = ''
-  proposedPrices.value[questId] = ''
-  await refreshApplicationsForQuest(questId)
-  openApplicationsQuestIds.value[questId] = true
-}
-
-// REFRESH APPLICATIONS FOR QUEST
-const refreshApplicationsForQuest = async (questId: number) => {
-  const res = await axios.get<QuestApplication[]>(`http://localhost:8080/quests/${questId}/applications`, {
-    headers: authHeader()
-  })
-  applicationsByQuestId.value[questId] = res.data
-}
-
-onMounted(() => {
-  fetchQuests()
-})
+onMounted(dashboard.init)
 </script>
 
 <template>
-  <div>
-    <h1>Quests</h1>
+  <div class="page page--dashboard">
+    <div class="dashboard-shell">
+      <DashboardSidebar :dashboard="dashboard" :on-logout="handleLogout" />
 
-    <!-- CREATE QUEST FORM -->
-    <div style="margin-bottom: 20px">
-      <input v-model="title" placeholder="title"/>
-      <input v-model="description" placeholder="description"/>
-      <input v-model="awardAmount" placeholder="award amount"/>
+      <main class="dashboard-main">
+        <DashboardHeader :dashboard="dashboard" />
 
-      <button @click="createQuest">Create Quest</button>
-    </div>
-
-    <!-- LIST QUESTS -->
-    <div v-for="quest in quests" :key="quest.id" style="border: 1px solid #ccc; padding: 12px; margin-bottom: 12px">
-      <div>
-        <strong>{{ quest.id }} - {{ quest.title }} </strong>
-      </div>
-      <div>
-        {{ quest.description }}
-      </div>
-      <div>
-        Award: {{ quest.awardAmount }}
-      </div>
-      <div>
-        Status: {{ quest.status }}
-      </div>
-      <div>
-        Creator: {{ quest.creatorUsername }}
-      </div>
-      <hr/>
-
-      <h4>Apply for this quest</h4>
-      <input v-model="applicationMessages[quest.id]" placeholder="application message"/>
-      <input v-model="proposedPrices[quest.id]" placeholder="proposedPrice"/>
-      <button @click="applyForQuest(quest.id)">Apply</button>
-
-      <button @click="toggleApplicationsForQuest(quest.id)">
-        {{ openApplicationsQuestIds[quest.id] ? 'Hide Applications' : 'Show Applications' }}
-      </button>
-      <div v-if="openApplicationsQuestIds[quest.id]">
-        <h4>Applications</h4>
-
-        <div v-if="!applicationsByQuestId[quest.id]?.length">
-          No applications yet.
+        <div v-if="dashboard.feedback" :class="['alert', dashboard.feedbackType === 'error' ? 'alert--error' : 'alert--success']">
+          {{ dashboard.feedback }}
         </div>
 
-        <div v-for="application in applicationsByQuestId[quest.id]" :key="application.id"
-             style="border-left: 4px solid #42b883; background: #f7fff9; padding: 8px 12px; margin-top: 8px">
-          <div>Applicant: {{ application.applicantUsername }}</div>
-          <div>Message: {{ application.message }}</div>
-          <div>Proposed Price: {{ application.proposedPrice }}</div>
-          <div>Status: {{ application.status }}</div>
+        <div v-if="dashboard.questsError" class="alert alert--error">
+          <div>{{ dashboard.questsError }}</div>
+          <details class="debug-details mt-2">
+            <summary class="debug-summary">Quest request debug details</summary>
+            <ul class="debug-list">
+              <li v-for="line in dashboard.questsErrorDetails" :key="line">{{ line }}</li>
+            </ul>
+            <div class="button-row mt-3">
+              <button class="button button--secondary debug-copy" type="button" @click="dashboard.copyDebugInfo(dashboard.questsErrorDetails)">
+                {{ dashboard.copiedDebug ? "Copied" : "Copy debug info" }}
+              </button>
+            </div>
+          </details>
         </div>
-      </div>
-      <div>
-      </div>
+
+        <div v-if="dashboard.applicationsError" class="alert alert--error">
+          <div>{{ dashboard.applicationsError }}</div>
+          <details class="debug-details mt-2">
+            <summary class="debug-summary">Application request debug details</summary>
+            <ul class="debug-list">
+              <li v-for="line in dashboard.applicationsErrorDetails" :key="line">{{ line }}</li>
+            </ul>
+            <div class="button-row mt-3">
+              <button class="button button--secondary debug-copy" type="button" @click="dashboard.copyDebugInfo(dashboard.applicationsErrorDetails)">
+                {{ dashboard.copiedDebug ? "Copied" : "Copy debug info" }}
+              </button>
+            </div>
+          </details>
+        </div>
+
+        <div v-if="dashboard.usersError" class="alert alert--error">
+          <div>{{ dashboard.usersError }}</div>
+          <details class="debug-details mt-2">
+            <summary class="debug-summary">User request debug details</summary>
+            <ul class="debug-list">
+              <li v-for="line in dashboard.usersErrorDetails" :key="line">{{ line }}</li>
+            </ul>
+            <div class="button-row mt-3">
+              <button class="button button--secondary debug-copy" type="button" @click="dashboard.copyDebugInfo(dashboard.usersErrorDetails)">
+                {{ dashboard.copiedDebug ? "Copied" : "Copy debug info" }}
+              </button>
+            </div>
+          </details>
+        </div>
+
+        <div v-if="dashboard.isLoadingQuests || dashboard.isLoadingApplications || dashboard.isLoadingUsers" class="empty-state">
+          <div v-if="dashboard.isLoadingQuests">Loading quests...</div>
+          <div v-if="dashboard.isLoadingApplications">Loading applications...</div>
+          <div v-if="dashboard.isLoadingUsers">Loading users...</div>
+          <div class="debug-inline mt-2">GET /quests | GET /quests/applications/me | GET /app_users</div>
+        </div>
+
+        <DashboardOverview v-if="dashboard.activeTab === 'overview'" :dashboard="dashboard" />
+        <DashboardPostWork v-else-if="dashboard.activeTab === 'post-work'" :dashboard="dashboard" />
+        <DashboardMyQuests v-else-if="dashboard.activeTab === 'my-quests'" :dashboard="dashboard" />
+        <DashboardFindQuests v-else-if="dashboard.activeTab === 'find-quests'" :dashboard="dashboard" />
+        <DashboardMyApplications v-else-if="dashboard.activeTab === 'my-applications'" :dashboard="dashboard" />
+        <DashboardProfile v-else-if="dashboard.activeTab === 'profile'" :dashboard="dashboard" />
+        <DashboardAdmin v-else-if="dashboard.activeTab === 'admin'" :dashboard="dashboard" />
+
+        <UiDialog
+          :open="dashboard.isProfileEditDialogOpen"
+          title="Edit profile"
+          subtitle="Update your username."
+          @close="dashboard.closeProfileEditDialog"
+        >
+          <form class="stack" @submit.prevent="dashboard.saveProfile">
+            <div class="field">
+              <span class="label">Email</span>
+              <strong>{{ dashboard.currentUser?.email }}</strong>
+            </div>
+
+            <label class="field">
+              <span class="label">Username</span>
+              <input v-model="dashboard.profileUsername" class="input" />
+            </label>
+
+            <div class="button-row">
+              <button class="button" type="submit">Save profile</button>
+            </div>
+          </form>
+        </UiDialog>
+      </main>
     </div>
   </div>
 </template>

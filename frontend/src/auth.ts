@@ -4,6 +4,7 @@ export interface AuthUser {
     id: number
     email: string
     username: string
+    role: string
     token: string | null
 }
 
@@ -41,4 +42,8 @@ export const authHeader = () => {
 
 export const isLoggedIn = () => {
     return token.value !== null
+}
+
+export const isAdmin = () => {
+    return currentUser.value?.role === "ADMIN"
 }

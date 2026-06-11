@@ -7,6 +7,7 @@ import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.service.AppUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,6 +35,12 @@ public class AppUserController {
                 .toList();
     }
 
+    @GetMapping("/me")
+    public AppUserResponseDTO getCurrentAppUser(Authentication authentication) {
+        AppUser appUser = (AppUser) authentication.getPrincipal();
+        return appUserMgr.toDto(appUser);
+    }
+
     @DeleteMapping("/{id}")
     public void deleteAppUser(@PathVariable long id) {
         appUserService.deleteUser(id);
@@ -43,5 +50,12 @@ public class AppUserController {
     public AppUserResponseDTO updateAppUser(@PathVariable long id, @Valid @RequestBody AppUserRequestDTO dto) {
         AppUser appUser = appUserService.updateAppUser(id, dto);
         return appUserMgr.toDto(appUser);
+    }
+
+    @PutMapping("/me")
+    public AppUserResponseDTO updateCurrentAppUser(Authentication authentication, @Valid @RequestBody AppUserRequestDTO dto) {
+        AppUser appUser = (AppUser) authentication.getPrincipal();
+        AppUser updatedAppUser = appUserService.updateAppUser(appUser.getId(), dto);
+        return appUserMgr.toDto(updatedAppUser);
     }
 }

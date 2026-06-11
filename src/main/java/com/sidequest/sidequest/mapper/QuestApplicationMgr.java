@@ -30,6 +30,7 @@ public class QuestApplicationMgr {
                 .id(application.getId())
                 .questId(application.getQuest().getId())
                 .questTitle(application.getQuest().getTitle())
+                .questDescription(application.getQuest().getDescription())
                 .applicantId(application.getApplicant().getId())
                 .applicantUsername(application.getApplicant().getUsername())
                 .message(application.getMessage())

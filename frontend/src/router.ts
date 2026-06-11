@@ -1,8 +1,10 @@
 import {createRouter, createWebHistory} from "vue-router";
+import AppUsersPage from "./pages/AppUsersPage.vue";
 import QuestsPage from "./pages/QuestsPage.vue";
+import QuestDetailView from "./views/QuestDetailView.vue";
 import LoginView from "./views/LoginView.vue";
 import RegisterView from "./views/RegisterView.vue";
-import {isLoggedIn} from "./auth.ts";
+import {isAdmin, isLoggedIn} from "./auth.ts";
 
 
 const routes = [
@@ -22,6 +24,16 @@ const routes = [
         path: '/quests',
         component: QuestsPage,
         meta: {requiresAuth: true}
+    },
+    {
+        path: '/quests/:id',
+        component: QuestDetailView,
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/app-users',
+        component: AppUsersPage,
+        meta: {requiresAuth: true, requiresAdmin: true}
     }
 ];
 
@@ -33,6 +45,10 @@ export const router = createRouter({
 router.beforeEach((to) => {
     if (to.meta.requiresAuth && !isLoggedIn()) {
         return '/login';
+    }
+
+    if (to.meta.requiresAdmin && !isAdmin()) {
+        return '/quests';
     }
 
     if (isLoggedIn() && (to.path === '/login' || to.path === '/register')) {

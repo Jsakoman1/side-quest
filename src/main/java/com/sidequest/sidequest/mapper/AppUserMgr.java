@@ -3,6 +3,7 @@ package com.sidequest.sidequest.mapper;
 import com.sidequest.sidequest.dto.AppUserRequestDTO;
 import com.sidequest.sidequest.dto.AppUserResponseDTO;
 import com.sidequest.sidequest.model.AppUser;
+import com.sidequest.sidequest.model.AppUserRole;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,6 +15,7 @@ public class AppUserMgr {
             AppUser appUser = new AppUser();
             appUser.setEmail(dto.getEmail());
             appUser.setUsername(dto.getUsername());
+            appUser.setRole(AppUserRole.USER);
             return appUser;
         }
     }
@@ -26,6 +28,7 @@ public class AppUserMgr {
                     .id(appUser.getId())
                     .email(appUser.getEmail())
                     .username(appUser.getUsername())
+                    .role(appUser.getRole() == null ? AppUserRole.USER.name() : appUser.getRole().name())
                     .build();
         }
     }

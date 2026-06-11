@@ -1,115 +1,104 @@
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import axios from 'axios'
+import {onMounted} from "vue"
+import AppUsersCreateForm from "../components/app-users/AppUsersCreateForm.vue"
+import AppUsersHeader from "../components/app-users/AppUsersHeader.vue"
+import AppUsersList from "../components/app-users/AppUsersList.vue"
+import UiDialog from "../components/ui/UiDialog.vue"
+import {useAppUsersPage} from "../composables/useAppUsersPage.ts"
 
-interface AppUser {
-  id: number
-  email: string
-  username: string
-}
+const {
+  appUsers,
+  isLoadingUsers,
+  pageError,
+  pageErrorDetails,
+  copiedDebug,
+  feedback,
+  feedbackType,
+  email,
+  username,
+  editingAppUserId,
+  editAppUserEmail,
+  editAppUserUsername,
+  copyDebugInfo,
+  createAppUser,
+  handleDelete,
+  startEdit,
+  updateAppUser,
+  cancelEdit,
+  openCreateUserDialog,
+  closeCreateUserDialog,
+  isCreateUserDialogOpen,
+  init,
+  isAdmin
+} = useAppUsersPage()
 
-const appUsers = ref<AppUser[]>([])
-
-// Form
-const email = ref('')
-const username = ref('')
-
-// FETCH USERS
-const fetchAppUsers = async () => {
-  const res = await axios.get<AppUser[]>('http://localhost:8080/app_users')
-  appUsers.value = res.data
-}
-
-// CREATE APP USER
-const createAppUser = async () => {
-  await axios.post('http://localhost:8080/app_users', {
-    email: email.value,
-    username: username.value
-  })
-  // reset inputs and refresh
-  email.value = ''
-  username.value = ''
-  await fetchAppUsers()
-}
-
-const deleteAppUser = async (id: number) => {
-  await axios.delete(`http://localhost:8080/app_users/${id}`)
-  // refresh
-  await fetchAppUsers()
-}
-
-// helper confirmDelete
-const handleDelete = async (id: number) => {
-  if (confirm('Delete AppUser?'))
-    return await deleteAppUser(id)
-}
-
-// EditMode
-const editingAppUserId = ref<number | null>(null)
-const editAppUserEmail = ref('')
-const editAppUserUsername = ref('')
-
-const startEdit = (appUser: AppUser) => {
-  editingAppUserId.value = appUser.id
-  editAppUserEmail.value = appUser.email
-  editAppUserUsername.value = appUser.username
-}
-
-const updateAppUser = async () => {
-  if (editingAppUserId.value === null) {
-    return
-  }
-  await axios.put(`http://localhost:8080/app_users/${editingAppUserId.value}`, {
-    email: editAppUserEmail.value,
-    username: editAppUserUsername.value,
-  })
-
-  // reset fields and refresh
-  editingAppUserId.value = null
-  editAppUserEmail.value = ''
-  editAppUserUsername.value = ''
-  await fetchAppUsers()
-}
-
-const cancelEdit = () => {
-  editingAppUserId.value = null
-}
-
-onMounted(() => {
-  fetchAppUsers()
-})
+onMounted(init)
 </script>
 
 <template>
-  <div>
-    <h1>App Users</h1>
+  <div class="page">
+    <AppUsersHeader
+      title="Users"
+      subtitle="Manage accounts."
+    />
 
-    <!-- CREATE APP USER FORM -->
-    <div style="margin-bottom: 20px">
-      <input v-model="email" placeholder="email"/>
-      <input v-model="username" placeholder="username"/>
-
-      <button @click="createAppUser">Create AppUser</button>
+    <div v-if="feedback" :class="['alert', feedbackType === 'error' ? 'alert--error' : 'alert--success']">
+      {{ feedback }}
     </div>
 
-    <!-- LIST APP USERS -->
-    <div v-for="appUser in appUsers" :key="appUser.id">
-
-      <!-- NORMAL VIEW -->
-      <div v-if="editingAppUserId !== appUser.id">
-        {{ appUser.id }} - {{ appUser.email }} - {{ appUser.username }}
-        <button @click="startEdit(appUser)">Edit</button>
-        <button @click="handleDelete(appUser.id)">Delete AppUser</button>
-      </div>
-
-      <!-- EDIT MODE -->
-      <div v-else>
-        <input v-model="editAppUserEmail"/>
-        <input v-model="editAppUserUsername"/>
-
-        <button @click="updateAppUser">Save</button>
-        <button @click="cancelEdit">Cancel</button>
-      </div>
+    <div v-if="pageError" class="alert alert--error mb-4">
+      <div>{{ pageError }}</div>
+      <details class="debug-details mt-2">
+        <summary class="debug-summary">Debug details</summary>
+        <ul class="debug-list">
+          <li v-for="line in pageErrorDetails" :key="line">{{ line }}</li>
+        </ul>
+        <div class="button-row mt-3">
+          <button class="button button--secondary debug-copy" type="button" @click="copyDebugInfo">
+            {{ copiedDebug ? "Copied" : "Copy debug info" }}
+          </button>
+        </div>
+      </details>
     </div>
+
+    <div v-if="isLoadingUsers" class="empty-state mb-4">
+      Loading users...
+      <div class="debug-inline mt-2">GET /app_users</div>
+    </div>
+
+    <div v-if="!isAdmin()" class="alert alert--error mb-4">
+      This page is available only to admin users.
+    </div>
+
+    <div v-if="isAdmin()" class="button-row mb-4">
+      <button class="button" type="button" @click="openCreateUserDialog">Create user</button>
+    </div>
+
+    <AppUsersList
+      v-if="isAdmin()"
+      :users="appUsers"
+      :editing-user-id="editingAppUserId"
+      :edit-email="editAppUserEmail"
+      :edit-username="editAppUserUsername"
+      @edit="startEdit"
+      @delete="handleDelete"
+      @save="updateAppUser"
+      @cancel="cancelEdit"
+      @update:edit-email="editAppUserEmail = $event"
+      @update:edit-username="editAppUserUsername = $event"
+    />
+
+    <UiDialog
+      :open="isCreateUserDialogOpen"
+      title="Create user"
+      subtitle="Create a new admin-managed account."
+      @close="closeCreateUserDialog"
+    >
+      <AppUsersCreateForm
+        v-model:email="email"
+        v-model:username="username"
+        @submit="createAppUser"
+      />
+    </UiDialog>
   </div>
 </template>
