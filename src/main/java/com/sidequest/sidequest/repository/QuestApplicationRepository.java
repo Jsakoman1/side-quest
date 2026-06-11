@@ -8,5 +8,6 @@ import java.util.List;
 public interface QuestApplicationRepository extends JpaRepository<QuestApplication, Long> {
 
     List<QuestApplication> findByQuestId(Long questId);
-    
+
+    boolean existsByQuestIdAndApplicantId(Long questId, Long applicantId);
 }

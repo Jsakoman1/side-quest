@@ -2,6 +2,7 @@
 
 import {onMounted, ref} from "vue";
 import axios from "axios";
+import {authHeader, currentUser} from "../auth.ts";
 
 interface Quest {
   id: number
@@ -11,12 +12,6 @@ interface Quest {
   description: string
   awardAmount: number
   status: string
-}
-
-interface AppUser {
-  id: number
-  email: string
-  username: string
 }
 
 interface QuestApplication {
@@ -32,16 +27,13 @@ interface QuestApplication {
 }
 
 const quests = ref<Quest[]>([])
-const appUsers = ref<AppUser[]>([]) // used for AppUsers dropdown in CreateMode
 
 // Form fields
-const creatorId = ref<number | ''>('')
 const title = ref('')
 const description = ref('')
 const awardAmount = ref('')
 
 // Form Applications
-const selectedApplicantIds = ref<Record<number, number | ''>>({})
 const applicationMessages = ref<Record<number, string>>({})
 const proposedPrices = ref<Record<number, string>>({})
 const applicationsByQuestId = ref<Record<number, QuestApplication[]>>({})
@@ -49,32 +41,28 @@ const openApplicationsQuestIds = ref<Record<number, boolean>>({})
 
 // FETCH QUESTS
 const fetchQuests = async () => {
-  const res = await axios.get<Quest[]>('http://localhost:8080/quests')
+  const res = await axios.get<Quest[]>('http://localhost:8080/quests', {
+    headers: authHeader()
+  })
   quests.value = res.data
-}
-
-// FETCH APP USERS
-const fetchAppUsers = async () => {
-  const res = await axios.get<AppUser[]>('http://localhost:8080/app_users')
-  appUsers.value = res.data
 }
 
 // CREATE QUEST
 const createQuest = async () => {
-  if (creatorId.value === '') {
-    alert('Please select creator')
+  if (!currentUser.value) {
+    alert('You must be logged in')
     return
   }
 
   await axios.post('http://localhost:8080/quests', {
-    creatorId: creatorId.value,
     title: title.value,
     description: description.value,
     awardAmount: Number(awardAmount.value)
+  }, {
+    headers: authHeader()
   })
 
   // reset inputs and refresh
-  creatorId.value = ''
   title.value = ''
   description.value = ''
   awardAmount.value = ''
@@ -94,20 +82,18 @@ const toggleApplicationsForQuest = async (questId: number) => {
 
 // APPLY FOR QUEST
 const applyForQuest = async (questId: number) => {
-  const applicantId = selectedApplicantIds.value[questId]
-
-  if (applicantId === '' || applicantId === undefined) {
-    alert('Please select applicant')
+  if (!currentUser.value) {
+    alert('You must be logged in')
     return
   }
 
   await axios.post(`http://localhost:8080/quests/${questId}/applications`, {
-    applicantId: applicantId,
     message: applicationMessages.value[questId] ?? '',
     proposedPrice: Number(proposedPrices.value[questId] ?? 0)
+  }, {
+    headers: authHeader()
   })
 
-  selectedApplicantIds.value[questId] = ''
   applicationMessages.value[questId] = ''
   proposedPrices.value[questId] = ''
   await refreshApplicationsForQuest(questId)
@@ -116,13 +102,14 @@ const applyForQuest = async (questId: number) => {
 
 // REFRESH APPLICATIONS FOR QUEST
 const refreshApplicationsForQuest = async (questId: number) => {
-  const res = await axios.get<QuestApplication[]>(`http://localhost:8080/quests/${questId}/applications`)
+  const res = await axios.get<QuestApplication[]>(`http://localhost:8080/quests/${questId}/applications`, {
+    headers: authHeader()
+  })
   applicationsByQuestId.value[questId] = res.data
 }
 
 onMounted(() => {
   fetchQuests()
-  fetchAppUsers()
 })
 </script>
 
@@ -132,15 +119,6 @@ onMounted(() => {
 
     <!-- CREATE QUEST FORM -->
     <div style="margin-bottom: 20px">
-      <select v-model="creatorId">
-        <option disabled value="">Select Creator</option>
-        <option
-            v-for="appUser in appUsers"
-            :key="appUser.id"
-            :value="appUser.id"
-        >{{ appUser.username }} - {{ appUser.email }}
-        </option>
-      </select>
       <input v-model="title" placeholder="title"/>
       <input v-model="description" placeholder="description"/>
       <input v-model="awardAmount" placeholder="award amount"/>
@@ -168,12 +146,6 @@ onMounted(() => {
       <hr/>
 
       <h4>Apply for this quest</h4>
-      <select v-model="selectedApplicantIds[quest.id]">
-        <option disabled value="">Select Applicant</option>
-        <option v-for="appUser in appUsers" :key="appUser.id" :value="appUser.id">
-          {{ appUser.username }} - {{ appUser.email }}
-        </option>
-      </select>
       <input v-model="applicationMessages[quest.id]" placeholder="application message"/>
       <input v-model="proposedPrices[quest.id]" placeholder="proposedPrice"/>
       <button @click="applyForQuest(quest.id)">Apply</button>
