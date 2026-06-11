@@ -37,6 +37,11 @@ public class QuestController {
                 .toList();
     }
 
+    @GetMapping("/{id}")
+    public QuestResponseDTO getQuest(@PathVariable long id) {
+        return questMgr.toDto(questService.getQuest(id));
+    }
+
     @DeleteMapping("/{id}")
     public void deleteQuest(@PathVariable long id, Authentication authentication) {
         AppUser currentUser = (AppUser) authentication.getPrincipal();
@@ -47,6 +52,27 @@ public class QuestController {
     public QuestResponseDTO updateQuest(@PathVariable long id, @Valid @RequestBody QuestRequestDTO dto, Authentication authentication) {
         AppUser currentUser = (AppUser) authentication.getPrincipal();
         Quest quest = questService.updateQuest(id, dto, currentUser);
+        return questMgr.toDto(quest);
+    }
+
+    @PatchMapping("/{id}/start")
+    public QuestResponseDTO startQuest(@PathVariable long id, Authentication authentication) {
+        AppUser currentUser = (AppUser) authentication.getPrincipal();
+        Quest quest = questService.startQuest(id, currentUser);
+        return questMgr.toDto(quest);
+    }
+
+    @PatchMapping("/{id}/complete")
+    public QuestResponseDTO completeQuest(@PathVariable long id, Authentication authentication) {
+        AppUser currentUser = (AppUser) authentication.getPrincipal();
+        Quest quest = questService.completeQuest(id, currentUser);
+        return questMgr.toDto(quest);
+    }
+
+    @PatchMapping("/{id}/cancel")
+    public QuestResponseDTO cancelQuest(@PathVariable long id, Authentication authentication) {
+        AppUser currentUser = (AppUser) authentication.getPrincipal();
+        Quest quest = questService.cancelQuest(id, currentUser);
         return questMgr.toDto(quest);
     }
 }

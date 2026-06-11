@@ -6,6 +6,7 @@ import com.sidequest.sidequest.mapper.QuestApplicationMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestApplication;
+import com.sidequest.sidequest.model.QuestApplicationStatus;
 import com.sidequest.sidequest.model.QuestStatus;
 import com.sidequest.sidequest.repository.QuestApplicationRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
@@ -125,6 +126,57 @@ class QuestApplicationServiceTest {
         assertEquals(22L, result.getFirst().getId());
     }
 
+    @Test
+    void acceptApplicationSetsApplicationAndQuestStatus() {
+        AppUser creator = createUser(1L, "creator");
+        AppUser applicant = createUser(2L, "applicant");
+        AppUser otherApplicant = createUser(3L, "other");
+        Quest quest = createQuest(7L, creator, QuestStatus.OPEN);
+        QuestApplication acceptedApplication = createApplication(11L, quest, applicant, QuestApplicationStatus.PENDING);
+        QuestApplication otherApplication = createApplication(12L, quest, otherApplicant, QuestApplicationStatus.PENDING);
+        QuestApplicationResponseDTO responseDTO = QuestApplicationResponseDTO.builder()
+                .id(11L)
+                .status(QuestApplicationStatus.ACCEPTED)
+                .build();
+
+        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questApplicationRepository.findByIdAndQuestId(11L, 7L)).thenReturn(Optional.of(acceptedApplication));
+        when(questApplicationRepository.findByQuestIdAndStatus(7L, QuestApplicationStatus.PENDING)).thenReturn(List.of(acceptedApplication, otherApplication));
+        when(questApplicationRepository.save(acceptedApplication)).thenReturn(acceptedApplication);
+        when(questApplicationRepository.save(otherApplication)).thenReturn(otherApplication);
+        when(questRepository.save(quest)).thenReturn(quest);
+        when(questApplicationMgr.toDto(acceptedApplication)).thenReturn(responseDTO);
+
+        QuestApplicationResponseDTO result = questApplicationService.acceptApplication(7L, 11L, creator);
+
+        assertEquals(QuestApplicationStatus.ACCEPTED, result.getStatus());
+        assertEquals(QuestStatus.ASSIGNED, quest.getStatus());
+        assertEquals(QuestApplicationStatus.ACCEPTED, acceptedApplication.getStatus());
+        assertEquals(QuestApplicationStatus.REJECTED, otherApplication.getStatus());
+    }
+
+    @Test
+    void rejectApplicationSetsStatusToRejected() {
+        AppUser creator = createUser(1L, "creator");
+        AppUser applicant = createUser(2L, "applicant");
+        Quest quest = createQuest(7L, creator, QuestStatus.OPEN);
+        QuestApplication application = createApplication(11L, quest, applicant, QuestApplicationStatus.PENDING);
+        QuestApplicationResponseDTO responseDTO = QuestApplicationResponseDTO.builder()
+                .id(11L)
+                .status(QuestApplicationStatus.REJECTED)
+                .build();
+
+        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questApplicationRepository.findByIdAndQuestId(11L, 7L)).thenReturn(Optional.of(application));
+        when(questApplicationRepository.save(application)).thenReturn(application);
+        when(questApplicationMgr.toDto(application)).thenReturn(responseDTO);
+
+        QuestApplicationResponseDTO result = questApplicationService.rejectApplication(7L, 11L, creator);
+
+        assertEquals(QuestApplicationStatus.REJECTED, result.getStatus());
+        assertEquals(QuestApplicationStatus.REJECTED, application.getStatus());
+    }
+
     private AppUser createUser(Long id, String username) {
         AppUser appUser = new AppUser();
         appUser.setId(id);
@@ -140,5 +192,15 @@ class QuestApplicationServiceTest {
         quest.setStatus(status);
         quest.setTitle("Quest title");
         return quest;
+    }
+
+    private QuestApplication createApplication(Long id, Quest quest, AppUser applicant, QuestApplicationStatus status) {
+        QuestApplication application = new QuestApplication();
+        application.setId(id);
+        application.setQuest(quest);
+        application.setApplicant(applicant);
+        application.setStatus(status);
+        application.setMessage("Message");
+        return application;
     }
 }

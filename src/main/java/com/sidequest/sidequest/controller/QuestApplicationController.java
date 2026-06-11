@@ -34,4 +34,24 @@ public class QuestApplicationController {
         return questApplicationService.getApplicationsForQuest(questId, currentUser);
     }
 
+    @PatchMapping("/quests/{questId}/applications/{applicationId}/accept")
+    public QuestApplicationResponseDTO acceptApplication(
+            @PathVariable Long questId,
+            @PathVariable Long applicationId,
+            Authentication authentication
+    ) {
+        AppUser currentUser = (AppUser) authentication.getPrincipal();
+        return questApplicationService.acceptApplication(questId, applicationId, currentUser);
+    }
+
+    @PatchMapping("/quests/{questId}/applications/{applicationId}/reject")
+    public QuestApplicationResponseDTO rejectApplication(
+            @PathVariable Long questId,
+            @PathVariable Long applicationId,
+            Authentication authentication
+    ) {
+        AppUser currentUser = (AppUser) authentication.getPrincipal();
+        return questApplicationService.rejectApplication(questId, applicationId, currentUser);
+    }
+
 }
