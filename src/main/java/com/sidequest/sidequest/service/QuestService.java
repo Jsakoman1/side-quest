@@ -44,6 +44,10 @@ public class QuestService {
         return questRepository.save(quest);
     }
 
+    public Quest getQuest(Long id) {
+        return findQuestOrThrow(id);
+    }
+
     public List<Quest> getAllQuests() {
         return questRepository.findAll();
     }
@@ -100,6 +104,35 @@ public class QuestService {
         if (quest.getStatus() == QuestStatus.COMPLETED || quest.getStatus() == QuestStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quest is already finished");
         }
+
+        quest.setStatus(QuestStatus.CANCELLED);
+        rejectPendingApplications(quest);
+        return questRepository.save(quest);
+    }
+
+    public Quest startQuest(Long id, AppUser currentUser) {
+        Quest quest = findQuestOrThrow(id);
+        validateQuestOwner(quest, currentUser);
+        validateQuestStatus(quest, QuestStatus.ASSIGNED, "Quest can only be started after it has been assigned");
+
+        quest.setStatus(QuestStatus.IN_PROGRESS);
+        return questRepository.save(quest);
+    }
+
+    public Quest completeQuest(Long id, AppUser currentUser) {
+        Quest quest = findQuestOrThrow(id);
+        validateQuestOwner(quest, currentUser);
+        validateQuestStatus(quest, QuestStatus.IN_PROGRESS, "Quest can only be completed after it is in progress");
+
+        quest.setStatus(QuestStatus.COMPLETED);
+        return questRepository.save(quest);
+    }
+
+    @Transactional
+    public Quest cancelQuest(Long id, AppUser currentUser) {
+        Quest quest = findQuestOrThrow(id);
+        validateQuestOwner(quest, currentUser);
+        validateQuestNotTerminal(quest);
 
         quest.setStatus(QuestStatus.CANCELLED);
         rejectPendingApplications(quest);

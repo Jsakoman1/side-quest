@@ -112,6 +112,27 @@ public class QuestApplicationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest not found with id " + questId));
     }
 
+    private QuestApplication findPendingApplicationOrThrow(Long questId, Long applicationId) {
+        QuestApplication application = questApplicationRepository.findByIdAndQuestId(applicationId, questId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest application not found with id " + applicationId));
+
+        if (application.getStatus() != QuestApplicationStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending applications can be updated");
+        }
+
+        return application;
+    }
+
+    private void rejectOtherPendingApplications(Long questId, Long acceptedApplicationId) {
+        List<QuestApplication> pendingApplications = questApplicationRepository.findByQuestIdAndStatus(questId, QuestApplicationStatus.PENDING);
+        for (QuestApplication application : pendingApplications) {
+            if (!Objects.equals(application.getId(), acceptedApplicationId)) {
+                application.setStatus(QuestApplicationStatus.REJECTED);
+                questApplicationRepository.save(application);
+            }
+        }
+    }
+
     private void validateQuestIsOpen(Quest quest) {
         if (quest.getStatus() != QuestStatus.OPEN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Applications are only allowed for open quests");
