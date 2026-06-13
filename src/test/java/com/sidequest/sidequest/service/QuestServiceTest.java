@@ -74,7 +74,7 @@ class QuestServiceTest {
                 .awardAmount(BigDecimal.TEN)
                 .build();
 
-        when(questRepository.findById(9L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(9L)).thenReturn(Optional.of(quest));
 
         assertThrows(ResponseStatusException.class, () -> questService.updateQuest(9L, requestDTO, otherUser));
     }
@@ -92,7 +92,7 @@ class QuestServiceTest {
                 .awardAmount(BigDecimal.valueOf(80))
                 .build();
 
-        when(questRepository.findById(9L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(9L)).thenReturn(Optional.of(quest));
         when(questRepository.save(quest)).thenReturn(quest);
 
         questService.updateQuest(9L, requestDTO, creator);
@@ -114,7 +114,7 @@ class QuestServiceTest {
         quest.setCreator(creator);
         quest.setStatus(QuestStatus.ASSIGNED);
 
-        when(questRepository.findById(10L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(10L)).thenReturn(Optional.of(quest));
         when(questRepository.save(quest)).thenReturn(quest);
 
         questService.startQuest(10L, creator);
@@ -130,7 +130,7 @@ class QuestServiceTest {
         quest.setCreator(creator);
         quest.setStatus(QuestStatus.IN_PROGRESS);
 
-        when(questRepository.findById(11L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(11L)).thenReturn(Optional.of(quest));
         when(questRepository.save(quest)).thenReturn(quest);
 
         questService.completeQuest(11L, creator);
@@ -146,7 +146,7 @@ class QuestServiceTest {
         quest.setCreator(creator);
         quest.setStatus(QuestStatus.OPEN);
 
-        when(questRepository.findById(12L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(12L)).thenReturn(Optional.of(quest));
 
         assertThrows(ResponseStatusException.class, () -> questService.startQuest(12L, creator));
     }
@@ -158,7 +158,7 @@ class QuestServiceTest {
         quest.setId(14L);
         quest.setCreator(creator);
 
-        when(questRepository.findById(14L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(14L)).thenReturn(Optional.of(quest));
 
         questService.deleteQuest(14L, creator);
 

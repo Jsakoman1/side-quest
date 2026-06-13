@@ -2,11 +2,10 @@ package com.sidequest.sidequest.service;
 
 import com.sidequest.sidequest.dto.AppUserRequestDTO;
 import com.sidequest.sidequest.model.AppUser;
+import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.repository.AppUserRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -20,7 +19,13 @@ public class AppUserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public AppUser createAppUser(AppUser appUser) {
+    public AppUser createAppUser(AppUserRequestDTO dto) {
+        validatePassword(dto.getPassword());
+        AppUser appUser = new AppUser();
+        appUser.setEmail(dto.getEmail());
+        appUser.setUsername(dto.getUsername());
+        appUser.setRole(dto.getRole() == null ? AppUserRole.USER : dto.getRole());
+        appUser.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         return appUserRepository.save(appUser);
     }
 
@@ -33,34 +38,49 @@ public class AppUserService {
     }
 
     public AppUser updateAppUser(Long id, AppUserRequestDTO dto) {
-        AppUser appUser = appUserRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, String.format("AppUser not found with id %s", id)));
-
-        if (dto.getEmail() != null && !dto.getEmail().equals(appUser.getEmail()) && appUserRepository.existsByEmailAndIdNot(dto.getEmail(), id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
-        }
-
-        appUser.setUsername(dto.getUsername());
-        appUser.setEmail(dto.getEmail());
+        AppUser appUser = requireAppUser(id);
+        validateUniqueEmail(id, appUser, dto.getEmail());
+        updateBasicProfile(appUser, dto);
         return appUserRepository.save(appUser);
     }
 
     public AppUser updateAppUserAsAdmin(Long id, AppUserRequestDTO dto) {
-        AppUser appUser = appUserRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, String.format("AppUser not found with id %s", id)));
+        AppUser appUser = requireAppUser(id);
+        validateUniqueEmail(id, appUser, dto.getEmail());
+        updateBasicProfile(appUser, dto);
+        applyAdminOverrides(appUser, dto);
+        return appUserRepository.save(appUser);
+    }
 
-        if (dto.getEmail() != null && !dto.getEmail().equals(appUser.getEmail()) && appUserRepository.existsByEmailAndIdNot(dto.getEmail(), id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+    private AppUser requireAppUser(Long id) {
+        return appUserRepository.findById(id)
+                .orElseThrow(() -> ServiceErrors.notFound(String.format("AppUser not found with id %s", id)));
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.isBlank()) {
+            throw ServiceErrors.badRequest("Password is required");
         }
+    }
 
+    private void validateUniqueEmail(Long id, AppUser appUser, String email) {
+        if (email != null && !email.equals(appUser.getEmail()) && appUserRepository.existsByEmailAndIdNot(email, id)) {
+            throw ServiceErrors.conflict("Email already exists");
+        }
+    }
+
+    private void updateBasicProfile(AppUser appUser, AppUserRequestDTO dto) {
         appUser.setUsername(dto.getUsername());
         appUser.setEmail(dto.getEmail());
+    }
+
+    private void applyAdminOverrides(AppUser appUser, AppUserRequestDTO dto) {
         if (dto.getRole() != null) {
             appUser.setRole(dto.getRole());
         }
+
         if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
             appUser.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         }
-        return appUserRepository.save(appUser);
     }
 }

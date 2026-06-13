@@ -11,10 +11,8 @@ import com.sidequest.sidequest.model.QuestApplicationStatus;
 import com.sidequest.sidequest.model.QuestStatus;
 import com.sidequest.sidequest.repository.QuestApplicationRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Objects;
@@ -37,20 +35,15 @@ public class QuestApplicationService {
     }
 
     public QuestApplicationResponseDTO applyForQuest(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(questId);
-        validateQuestIsOpen(quest);
+        Quest quest = requireOpenQuest(questId);
         validateNotQuestCreator(quest, currentUser);
         validateNoDuplicateApplication(questId, currentUser.getId());
 
-        QuestApplication application = questApplicationMgr.toEntity(dto, quest, currentUser);
-        QuestApplication savedApplication = questApplicationRepository.save(application);
-
-        return questApplicationMgr.toDto(savedApplication);
+        return saveAndMapApplication(questApplicationMgr.toEntity(dto, quest, currentUser));
     }
 
     public List<QuestApplicationResponseDTO> getApplicationsForQuest(Long questId, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(questId);
-        validateQuestOwnerOrAdmin(quest, currentUser);
+        validateQuestOwnerOrAdmin(requireQuest(questId), currentUser);
 
         return questApplicationRepository.findByQuestId(questId)
                 .stream()
@@ -67,75 +60,78 @@ public class QuestApplicationService {
 
     @Transactional
     public QuestApplicationResponseDTO updateMyApplication(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
-        QuestApplication application = questApplicationRepository.findByQuestIdAndApplicantId(questId, currentUser.getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest application not found for current user"));
-
-        if (application.getStatus() != QuestApplicationStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending applications can be updated");
-        }
-
+        QuestApplication application = requirePendingMyApplication(questId, currentUser);
         application.setMessage(dto.getMessage());
         application.setProposedPrice(dto.getProposedPrice());
-        questApplicationRepository.save(application);
-        return questApplicationMgr.toDto(application);
+        return saveAndMapApplication(application);
     }
 
     @Transactional
     public QuestApplicationResponseDTO withdrawMyApplication(Long questId, AppUser currentUser) {
-        QuestApplication application = questApplicationRepository.findByQuestIdAndApplicantId(questId, currentUser.getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest application not found for current user"));
-
-        if (application.getStatus() != QuestApplicationStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending applications can be withdrawn");
-        }
-
+        QuestApplication application = requirePendingMyApplication(questId, currentUser);
         application.setStatus(QuestApplicationStatus.WITHDRAWN);
-        questApplicationRepository.save(application);
-        return questApplicationMgr.toDto(application);
+        return saveAndMapApplication(application);
     }
 
     @Transactional
     public QuestApplicationResponseDTO approveApplication(Long questId, Long applicationId, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(questId);
+        Quest quest = requireOpenQuest(questId);
         validateQuestOwnerOrAdmin(quest, currentUser);
-        validateQuestIsOpen(quest);
 
-        QuestApplication application = findPendingApplicationOrThrow(questId, applicationId);
+        QuestApplication application = requirePendingApplication(questId, applicationId);
         application.setStatus(QuestApplicationStatus.APPROVED);
         quest.setStatus(QuestStatus.ASSIGNED);
 
         declineOtherPendingApplications(questId, applicationId);
         questRepository.save(quest);
-        questApplicationRepository.save(application);
-        return questApplicationMgr.toDto(application);
+        return saveAndMapApplication(application);
     }
 
     @Transactional
     public QuestApplicationResponseDTO declineApplication(Long questId, Long applicationId, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(questId);
+        Quest quest = requireOpenQuest(questId);
         validateQuestOwnerOrAdmin(quest, currentUser);
-        validateQuestIsOpen(quest);
 
-        QuestApplication application = findPendingApplicationOrThrow(questId, applicationId);
+        QuestApplication application = requirePendingApplication(questId, applicationId);
         application.setStatus(QuestApplicationStatus.DECLINED);
-        questApplicationRepository.save(application);
-        return questApplicationMgr.toDto(application);
+        return saveAndMapApplication(application);
     }
 
-    private Quest findQuestOrThrow(Long questId) {
-        return questRepository.findById(questId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest not found with id " + questId));
+    private Quest requireQuest(Long questId) {
+        return questRepository.findByIdWithCreator(questId)
+                .orElseThrow(() -> ServiceErrors.notFound("Quest not found with id " + questId));
     }
 
-    private QuestApplication findPendingApplicationOrThrow(Long questId, Long applicationId) {
+    private Quest requireOpenQuest(Long questId) {
+        Quest quest = requireQuest(questId);
+        validateQuestIsOpen(quest);
+        return quest;
+    }
+
+    private QuestApplication requirePendingApplication(Long questId, Long applicationId) {
         QuestApplication application = questApplicationRepository.findByIdAndQuestId(applicationId, questId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest application not found with id " + applicationId));
+                .orElseThrow(() -> ServiceErrors.notFound("Quest application not found with id " + applicationId));
 
         if (application.getStatus() != QuestApplicationStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending applications can be updated");
+            throw ServiceErrors.badRequest("Only pending applications can be modified");
         }
 
         return application;
+    }
+
+    private QuestApplication requirePendingMyApplication(Long questId, AppUser currentUser) {
+        QuestApplication application = questApplicationRepository.findByQuestIdAndApplicantId(questId, currentUser.getId())
+                .orElseThrow(() -> ServiceErrors.notFound("Quest application not found for current user"));
+
+        if (application.getStatus() != QuestApplicationStatus.PENDING) {
+            throw ServiceErrors.badRequest("Only pending applications can be modified");
+        }
+
+        return application;
+    }
+
+    private QuestApplicationResponseDTO saveAndMapApplication(QuestApplication application) {
+        return questApplicationMgr.toDto(questApplicationRepository.save(application));
     }
 
     private void declineOtherPendingApplications(Long questId, Long approvedApplicationId) {
@@ -155,19 +151,19 @@ public class QuestApplicationService {
 
     private void validateQuestIsOpen(Quest quest) {
         if (quest.getStatus() != QuestStatus.OPEN) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Applications are only allowed for open quests");
+            throw ServiceErrors.badRequest("Applications are only allowed for open quests");
         }
     }
 
     private void validateNotQuestCreator(Quest quest, AppUser currentUser) {
         if (quest.getCreator().getId().equals(currentUser.getId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quest creator cannot apply to their own quest");
+            throw ServiceErrors.badRequest("Quest creator cannot apply to their own quest");
         }
     }
 
     private void validateNoDuplicateApplication(Long questId, Long applicantId) {
         if (questApplicationRepository.existsByQuestIdAndApplicantId(questId, applicantId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "You have already applied for this quest");
+            throw ServiceErrors.conflict("You have already applied for this quest");
         }
     }
 
@@ -177,7 +173,7 @@ public class QuestApplicationService {
         }
 
         if (!quest.getCreator().getId().equals(currentUser.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not allowed to view these applications");
+            throw ServiceErrors.forbidden("You are not allowed to view these applications");
         }
     }
 

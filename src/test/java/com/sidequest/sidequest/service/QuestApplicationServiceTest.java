@@ -57,7 +57,7 @@ class QuestApplicationServiceTest {
                 .applicantId(applicant.getId())
                 .build();
 
-        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
         when(questApplicationRepository.existsByQuestIdAndApplicantId(7L, 2L)).thenReturn(false);
         when(questApplicationMgr.toEntity(requestDTO, quest, applicant)).thenReturn(application);
         when(questApplicationRepository.save(application)).thenReturn(savedApplication);
@@ -77,7 +77,7 @@ class QuestApplicationServiceTest {
                 .message("I can help")
                 .build();
 
-        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
 
         assertThrows(ResponseStatusException.class, () -> questApplicationService.applyForQuest(7L, requestDTO, creator));
     }
@@ -91,7 +91,7 @@ class QuestApplicationServiceTest {
                 .message("I can help")
                 .build();
 
-        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
 
         assertThrows(ResponseStatusException.class, () -> questApplicationService.applyForQuest(7L, requestDTO, applicant));
     }
@@ -102,7 +102,7 @@ class QuestApplicationServiceTest {
         AppUser otherUser = createUser(3L, "other");
         Quest quest = createQuest(7L, creator, QuestStatus.OPEN);
 
-        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
 
         assertThrows(ResponseStatusException.class, () -> questApplicationService.getApplicationsForQuest(7L, otherUser));
     }
@@ -116,7 +116,7 @@ class QuestApplicationServiceTest {
                 .id(22L)
                 .build();
 
-        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
         when(questApplicationRepository.findByQuestId(7L)).thenReturn(List.of(application));
         when(questApplicationMgr.toDto(application)).thenReturn(responseDTO);
 
@@ -139,7 +139,7 @@ class QuestApplicationServiceTest {
                 .status(QuestApplicationStatus.APPROVED)
                 .build();
 
-        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
         when(questApplicationRepository.findByIdAndQuestId(11L, 7L)).thenReturn(Optional.of(approvedApplication));
         when(questApplicationRepository.findByQuestIdAndStatus(7L, QuestApplicationStatus.PENDING)).thenReturn(List.of(approvedApplication, otherApplication));
         when(questApplicationRepository.save(approvedApplication)).thenReturn(approvedApplication);
@@ -164,7 +164,7 @@ class QuestApplicationServiceTest {
                 .status(QuestApplicationStatus.DECLINED)
                 .build();
 
-        when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
+        when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
         when(questApplicationRepository.findByIdAndQuestId(11L, 7L)).thenReturn(Optional.of(application));
         when(questApplicationRepository.save(application)).thenReturn(application);
         when(questApplicationMgr.toDto(application)).thenReturn(responseDTO);

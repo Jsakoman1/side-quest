@@ -24,22 +24,20 @@ public class QuestController {
 
     @PostMapping
     public QuestResponseDTO createQuest(@Valid @RequestBody QuestRequestDTO dto, @AuthenticationPrincipal AppUser currentUser) {
-        Quest saved = questService.createQuest(dto, currentUser);
-        return questMgr.toDto(saved);
+        return toDto(questService.createQuest(dto, currentUser));
     }
 
     @GetMapping
     public List<QuestResponseDTO> getAllQuests() {
         return questService.getAllQuests()
                 .stream()
-                .map(questMgr::toDto)
+                .map(this::toDto)
                 .toList();
     }
 
     @GetMapping("/{id}")
     public QuestResponseDTO getQuestById(@PathVariable long id) {
-        Quest quest = questService.getQuestById(id);
-        return questMgr.toDto(quest);
+        return toDto(questService.getQuestById(id));
     }
 
     @DeleteMapping("/{id}")
@@ -49,19 +47,20 @@ public class QuestController {
 
     @PutMapping("/{id}")
     public QuestResponseDTO updateQuest(@PathVariable long id, @Valid @RequestBody QuestRequestDTO dto, @AuthenticationPrincipal AppUser currentUser) {
-        Quest quest = questService.updateQuest(id, dto, currentUser);
-        return questMgr.toDto(quest);
+        return toDto(questService.updateQuest(id, dto, currentUser));
     }
 
     @PatchMapping("/{id}/start")
     public QuestResponseDTO startQuest(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
-        Quest quest = questService.startQuest(id, currentUser);
-        return questMgr.toDto(quest);
+        return toDto(questService.startQuest(id, currentUser));
     }
 
     @PatchMapping("/{id}/complete")
     public QuestResponseDTO completeQuest(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
-        Quest quest = questService.completeQuest(id, currentUser);
+        return toDto(questService.completeQuest(id, currentUser));
+    }
+
+    private QuestResponseDTO toDto(Quest quest) {
         return questMgr.toDto(quest);
     }
 

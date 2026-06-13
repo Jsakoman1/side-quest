@@ -7,12 +7,11 @@ import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.security.JwtService;
+import com.sidequest.sidequest.service.ServiceErrors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/auth")
@@ -27,50 +26,50 @@ public class AuthController {
     @PostMapping("/register")
     public AuthResponse register(@RequestBody RegisterRequest registerRequest) {
         if (appUserRepository.existsByEmail(registerRequest.email())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+            throw ServiceErrors.conflict("Email already exists");
         }
 
-        AppUser appUser = new AppUser();
-        appUser.setEmail(registerRequest.email());
-        appUser.setUsername(registerRequest.username());
-        appUser.setPasswordHash(passwordEncoder.encode(registerRequest.password()));
-        appUser.setRole(AppUserRole.USER);
-
-        AppUser savedAppUser = appUserRepository.save(appUser);
-
-        return new AuthResponse(
-                savedAppUser.getId(),
-                savedAppUser.getEmail(),
-                savedAppUser.getUsername(),
-                savedAppUser.getRole() == null ? AppUserRole.USER.name() : savedAppUser.getRole().name(),
-                jwtService.generateToken(savedAppUser));
+        AppUser savedAppUser = appUserRepository.save(buildRegisteredUser(registerRequest));
+        return buildAuthResponse(savedAppUser, jwtService.generateToken(savedAppUser));
     }
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest loginRequest) {
         AppUser appUser = appUserRepository.findByEmail(loginRequest.email())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email"));
+                .orElseThrow(() -> ServiceErrors.unauthorized("Invalid email"));
 
         if (!passwordEncoder.matches(loginRequest.password(), appUser.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid password");
+            throw ServiceErrors.unauthorized("Invalid password");
         }
 
-        return new AuthResponse(
-                appUser.getId(),
-                appUser.getEmail(),
-                appUser.getUsername(),
-                appUser.getRole() == null ? AppUserRole.USER.name() : appUser.getRole().name(),
-                jwtService.generateToken(appUser));
+        return buildAuthResponse(appUser, jwtService.generateToken(appUser));
     }
 
     @GetMapping("/me")
     public AuthResponse me(Authentication authentication) {
         AppUser appUser = (AppUser) authentication.getPrincipal();
+        return buildAuthResponse(appUser, null);
+    }
+
+    private AppUser buildRegisteredUser(RegisterRequest registerRequest) {
+        AppUser appUser = new AppUser();
+        appUser.setEmail(registerRequest.email());
+        appUser.setUsername(registerRequest.username());
+        appUser.setPasswordHash(passwordEncoder.encode(registerRequest.password()));
+        appUser.setRole(AppUserRole.USER);
+        return appUser;
+    }
+
+    private AuthResponse buildAuthResponse(AppUser appUser, String token) {
         return new AuthResponse(
                 appUser.getId(),
                 appUser.getEmail(),
                 appUser.getUsername(),
-                appUser.getRole() == null ? AppUserRole.USER.name() : appUser.getRole().name(),
-                null); // for auth/me we do not need to return token
+                resolveRoleName(appUser),
+                token);
+    }
+
+    private String resolveRoleName(AppUser appUser) {
+        return appUser.getRole() == null ? AppUserRole.USER.name() : appUser.getRole().name();
     }
 }
