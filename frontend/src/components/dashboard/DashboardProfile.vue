@@ -1,17 +1,18 @@
 <script setup lang="ts">
+import DashboardSectionHeader from "./DashboardSectionHeader.vue"
+import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+
 defineProps<{
-  dashboard: any
+  dashboard: QuestDashboard
 }>()
 </script>
 
 <template>
   <section class="card">
-    <div class="card__header">
-      <div>
-        <h2 class="card__title">Profile</h2>
-        <p class="muted mt-2">Your details.</p>
-      </div>
-      <button class="button button--secondary" type="button" @click="dashboard.openProfileEditDialog()">Edit</button>
+    <DashboardSectionHeader title="Profile" subtitle="Your details." />
+
+    <div class="button-row button-row--end mt-2">
+      <button class="button button--icon button--secondary" type="button" aria-label="Edit profile" @click="dashboard.openProfileEditDialog()">✎</button>
     </div>
 
     <div class="stack">

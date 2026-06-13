@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+
 defineProps<{
-  dashboard: any
+  dashboard: QuestDashboard
 }>()
 </script>
 

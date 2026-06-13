@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {ref} from "vue";
-import axios from "axios";
 import {loginUser} from "../auth.ts";
 import {useRouter} from "vue-router";
+import {authApi} from "../api/authApi.ts";
 
 const email = ref('')
 const password = ref('')
@@ -12,11 +12,11 @@ const router = useRouter()
 const login = async () => {
   error.value = ''
   try {
-    const response = await axios.post('http://localhost:8080/auth/login', {
+    const response = await authApi.login({
       email: email.value,
       password: password.value
     })
-    loginUser(response.data)
+    loginUser(response)
     email.value = ''
     password.value = ''
     await router.push('/quests')

@@ -1,5 +1,5 @@
 import {createRouter, createWebHistory} from "vue-router";
-import AppUsersPage from "./pages/AppUsersPage.vue";
+import AdminPage from "./pages/AdminPage.vue";
 import QuestsPage from "./pages/QuestsPage.vue";
 import QuestDetailView from "./views/QuestDetailView.vue";
 import LoginView from "./views/LoginView.vue";
@@ -31,9 +31,13 @@ const routes = [
         meta: {requiresAuth: true}
     },
     {
-        path: '/app-users',
-        component: AppUsersPage,
+        path: '/admin',
+        component: AdminPage,
         meta: {requiresAuth: true, requiresAdmin: true}
+    },
+    {
+        path: '/app-users',
+        redirect: '/admin'
     }
 ];
 

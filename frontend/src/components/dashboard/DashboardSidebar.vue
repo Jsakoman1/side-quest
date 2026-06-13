@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted, ref} from "vue"
+import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 
-const props = defineProps<{
-  dashboard: any
+defineProps<{
+  dashboard: QuestDashboard
   onLogout: () => void
 }>()
 
-const sidebarRef = ref<HTMLElement | null>(null)
+const topbarRef = ref<HTMLElement | null>(null)
 const accountMenuOpen = ref(false)
 
 const toggleAccountMenu = () => {
@@ -19,7 +20,7 @@ const closeAccountMenu = () => {
 
 const handleDocumentClick = (event: MouseEvent) => {
   const target = event.target as Node | null
-  if (sidebarRef.value && target && !sidebarRef.value.contains(target)) {
+  if (topbarRef.value && target && !topbarRef.value.contains(target)) {
     closeAccountMenu()
   }
 }
@@ -34,52 +35,34 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside ref="sidebarRef" class="dashboard-sidebar panel">
-    <nav class="dashboard-nav">
-      <button
-        type="button"
-        class="dashboard-nav__button dashboard-nav__button--overview"
-        :class="{ 'dashboard-nav__button--active': dashboard.activeTab === 'overview' }"
-        @click="closeAccountMenu(); dashboard.clearOverviewFocus(); dashboard.goToTab('overview')"
-      >
-        <span class="dashboard-nav__icon dashboard-nav__icon--overview" aria-hidden="true">◎</span>
-        <span>
-          <strong>Overview</strong>
-        </span>
-      </button>
+  <header ref="topbarRef" class="dashboard-topbar">
+    <div class="dashboard-topbar__primary">
+      <div class="dashboard-brand">
+        <div class="dashboard-brand__copy">
+          <div class="brand__title">SideQuest</div>
+          <small>Task marketplace</small>
+        </div>
+      </div>
 
-      <button
-        v-for="tab in dashboard.visibleTabs"
-        :key="tab.id"
-        type="button"
-        :class="['dashboard-nav__button', { 'dashboard-nav__button--active': dashboard.activeTab === tab.id }]"
-        @click="closeAccountMenu(); dashboard.clearOverviewFocus(); dashboard.goToTab(tab.id)"
-      >
-        <span class="dashboard-nav__icon" :class="`dashboard-nav__icon--${tab.id}`" aria-hidden="true">{{ tab.icon }}</span>
-        <span>
-          <strong>{{ tab.title }}</strong>
-          <small v-if="tab.description">{{ tab.description }}</small>
-        </span>
-      </button>
-
-      <div class="dashboard-nav__spacer" aria-hidden="true"></div>
-
-      <div class="dashboard-account">
+      <div class="dashboard-topbar__user-shell">
         <button
-          class="dashboard-nav__button dashboard-nav__button--profile"
-          :class="{ 'dashboard-nav__button--active': dashboard.activeTab === 'profile' || accountMenuOpen }"
+          class="dashboard-topbar__user"
+          :class="{ 'dashboard-topbar__user--active': dashboard.activeTab === 'profile' || accountMenuOpen }"
           type="button"
           @click="toggleAccountMenu"
         >
-          <span class="dashboard-nav__icon dashboard-nav__icon--profile" aria-hidden="true">
-            <strong>{{ dashboard.currentUser?.username?.charAt(0).toUpperCase() ?? "U" }}</strong>
+          <span class="dashboard-topbar__user-avatar" aria-hidden="true">
+            {{ dashboard.currentUser?.username?.charAt(0).toUpperCase() ?? "U" }}
           </span>
-          <span>
+          <span class="dashboard-topbar__user-copy">
             <strong>{{ dashboard.currentUser?.username || "Account" }}</strong>
+            <small>Signed in</small>
           </span>
+          <span class="dashboard-topbar__chevron" aria-hidden="true">⌄</span>
         </button>
+
         <Transition name="sheet-fade">
-          <div v-if="accountMenuOpen" class="dashboard-account-menu__panel">
+          <div v-if="accountMenuOpen" class="dashboard-account-menu__panel dashboard-account-menu__panel--topbar">
             <button class="dashboard-account-menu__item" type="button" @click="closeAccountMenu(); dashboard.goToTab('profile')">
               My profile
             </button>
@@ -89,7 +72,35 @@ onBeforeUnmount(() => {
           </div>
         </Transition>
       </div>
-    </nav>
+    </div>
 
-  </aside>
+    <nav class="dashboard-nav dashboard-nav--topbar">
+      <button
+        type="button"
+        class="dashboard-nav__button dashboard-nav__button--overview"
+        :class="{ 'dashboard-nav__button--active': dashboard.activeTab === 'overview' }"
+        @click="closeAccountMenu(); dashboard.clearOverviewFocus(); dashboard.goToTab('overview')"
+      >
+        Overview
+      </button>
+
+      <button
+        type="button"
+        class="dashboard-nav__button dashboard-nav__button--post-work"
+        :class="{ 'dashboard-nav__button--active': dashboard.activeTab === 'post-work' }"
+        @click="closeAccountMenu(); dashboard.clearOverviewFocus(); dashboard.goToTab('post-work')"
+      >
+        Create work
+      </button>
+
+      <button
+        type="button"
+        class="dashboard-nav__button dashboard-nav__button--find-quests"
+        :class="{ 'dashboard-nav__button--active': dashboard.activeTab === 'find-quests' }"
+        @click="closeAccountMenu(); dashboard.clearOverviewFocus(); dashboard.goToTab('find-quests')"
+      >
+        Find work
+      </button>
+    </nav>
+  </header>
 </template>

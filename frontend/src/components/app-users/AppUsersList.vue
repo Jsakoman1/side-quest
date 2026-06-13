@@ -1,16 +1,15 @@
 <script setup lang="ts">
-interface AppUser {
-  id: number
-  email: string
-  username: string
-  role: string
-}
+import DashboardEditSheet from "../dashboard/DashboardEditSheet.vue"
+import type {AppUser} from "../../api/sidequestApi.ts"
+import {appUserRoleOptions, type AppUserRole} from "../../shared/sidequestDomain.ts"
 
 defineProps<{
   users: AppUser[]
   editingUserId: number | null
   editEmail: string
   editUsername: string
+  editRole: AppUserRole
+  editPassword: string
 }>()
 
 defineEmits<{
@@ -20,6 +19,8 @@ defineEmits<{
   (event: "cancel"): void
   (event: "update:editEmail", value: string): void
   (event: "update:editUsername", value: string): void
+  (event: "update:editRole", value: AppUserRole): void
+  (event: "update:editPassword", value: string): void
 }>()
 </script>
 
@@ -34,36 +35,64 @@ defineEmits<{
         </div>
 
         <div class="button-row">
-          <button class="button button--secondary" type="button" @click="$emit('edit', user)">Edit</button>
-          <button class="button button--danger" type="button" @click="$emit('delete', user.id)">Delete</button>
+          <button class="button button--icon button--secondary" type="button" aria-label="Edit user" @click="$emit('edit', user)">✎</button>
+          <button class="button button--icon button--danger" type="button" aria-label="Delete user" @click="$emit('delete', user.id)">×</button>
         </div>
       </div>
 
-      <form v-else class="stack" @submit.prevent="$emit('save')">
-        <div class="grid grid--two">
-          <label class="field">
-            <span class="label">Email</span>
-            <input
-              :value="editEmail"
-              class="input"
-              @input="$emit('update:editEmail', ($event.target as HTMLInputElement).value)"
-            />
-          </label>
+      <form v-else @submit.prevent="$emit('save')">
+        <DashboardEditSheet
+          :minimal="true"
+        >
+          <div class="dashboard-edit-form dashboard-edit-form--user-admin">
+            <label class="field dashboard-edit-field dashboard-edit-field--message">
+              <span class="label">Email</span>
+              <input
+                :value="editEmail"
+                class="input"
+                @input="$emit('update:editEmail', ($event.target as HTMLInputElement).value)"
+              />
+            </label>
 
-          <label class="field">
-            <span class="label">Username</span>
-            <input
-              :value="editUsername"
-              class="input"
-              @input="$emit('update:editUsername', ($event.target as HTMLInputElement).value)"
-            />
-          </label>
-        </div>
+            <label class="field dashboard-edit-field dashboard-edit-field--price">
+              <span class="label">Username</span>
+              <input
+                :value="editUsername"
+                class="input"
+                @input="$emit('update:editUsername', ($event.target as HTMLInputElement).value)"
+              />
+            </label>
 
-        <div class="button-row">
-          <button class="button" type="submit">Save</button>
-          <button class="button button--secondary" type="button" @click="$emit('cancel')">Cancel</button>
-        </div>
+            <label class="field dashboard-edit-field dashboard-edit-field--price">
+              <span class="label">Role</span>
+              <select
+                :value="editRole"
+                class="input"
+                @change="$emit('update:editRole', ($event.target as HTMLSelectElement).value as AppUserRole)"
+              >
+                <option v-for="option in appUserRoleOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label class="field dashboard-edit-field dashboard-edit-field--message">
+              <span class="label">Reset password</span>
+              <input
+                :value="editPassword"
+                class="input"
+                type="password"
+                placeholder="Leave blank to keep current password"
+                @input="$emit('update:editPassword', ($event.target as HTMLInputElement).value)"
+              />
+            </label>
+          </div>
+
+          <template #actions>
+            <button class="button button--action" type="submit">Save changes</button>
+            <button class="button button--ghost" type="button" @click="$emit('cancel')">Discard changes</button>
+          </template>
+        </DashboardEditSheet>
       </form>
     </article>
   </div>

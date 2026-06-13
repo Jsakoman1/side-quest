@@ -3,6 +3,7 @@ defineProps<{
   open: boolean
   title: string
   subtitle?: string
+  leading?: string
 }>()
 
 defineEmits<{
@@ -14,12 +15,16 @@ defineEmits<{
   <Teleport to="body">
     <div v-if="open" class="dialog-backdrop" @click.self="$emit('close')">
       <div class="dialog-panel card">
-        <div class="card__header">
-          <div>
-            <h2 class="card__title">{{ title }}</h2>
+        <div v-if="title || subtitle || $slots.actions" class="card__header">
+          <div class="card__header-main">
+            <span v-if="leading" class="card__header-leading">{{ leading }}</span>
+            <h2 v-if="title" class="card__title card__title--dialog">{{ title }}</h2>
             <p v-if="subtitle" class="muted mt-2">{{ subtitle }}</p>
           </div>
-          <button class="button button--secondary" type="button" @click="$emit('close')">Close</button>
+
+          <div v-if="$slots.actions" class="card__header-actions">
+            <slot name="actions" />
+          </div>
         </div>
 
         <slot />

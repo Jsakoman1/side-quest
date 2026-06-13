@@ -6,7 +6,7 @@ import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.service.QuestApplicationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,21 +22,18 @@ public class QuestApplicationController {
     public QuestApplicationResponseDTO applyForQuest(
             @PathVariable Long questId,
             @Valid @RequestBody QuestApplicationRequestDTO dto,
-            Authentication authentication
+            @AuthenticationPrincipal AppUser currentUser
     ) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
         return questApplicationService.applyForQuest(questId, dto, currentUser);
     }
 
     @GetMapping("/quests/{questId}/applications")
-    public List<QuestApplicationResponseDTO> getApplicationsForQuest(@PathVariable Long questId, Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
+    public List<QuestApplicationResponseDTO> getApplicationsForQuest(@PathVariable Long questId, @AuthenticationPrincipal AppUser currentUser) {
         return questApplicationService.getApplicationsForQuest(questId, currentUser);
     }
 
     @GetMapping("/quests/applications/me")
-    public List<QuestApplicationResponseDTO> getMyApplications(Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
+    public List<QuestApplicationResponseDTO> getMyApplications(@AuthenticationPrincipal AppUser currentUser) {
         return questApplicationService.getApplicationsForApplicant(currentUser);
     }
 
@@ -44,30 +41,32 @@ public class QuestApplicationController {
     public QuestApplicationResponseDTO updateMyApplication(
             @PathVariable Long questId,
             @Valid @RequestBody QuestApplicationRequestDTO dto,
-            Authentication authentication
+            @AuthenticationPrincipal AppUser currentUser
     ) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
         return questApplicationService.updateMyApplication(questId, dto, currentUser);
     }
 
-    @PatchMapping("/quests/{questId}/applications/{applicationId}/accept")
-    public QuestApplicationResponseDTO acceptApplication(
-            @PathVariable Long questId,
-            @PathVariable Long applicationId,
-            Authentication authentication
-    ) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
-        return questApplicationService.acceptApplication(questId, applicationId, currentUser);
+    @PatchMapping("/quests/{questId}/applications/me/withdraw")
+    public QuestApplicationResponseDTO withdrawMyApplication(@PathVariable Long questId, @AuthenticationPrincipal AppUser currentUser) {
+        return questApplicationService.withdrawMyApplication(questId, currentUser);
     }
 
-    @PatchMapping("/quests/{questId}/applications/{applicationId}/reject")
-    public QuestApplicationResponseDTO rejectApplication(
+    @PatchMapping("/quests/{questId}/applications/{applicationId}/approve")
+    public QuestApplicationResponseDTO approveApplication(
             @PathVariable Long questId,
             @PathVariable Long applicationId,
-            Authentication authentication
+            @AuthenticationPrincipal AppUser currentUser
     ) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
-        return questApplicationService.rejectApplication(questId, applicationId, currentUser);
+        return questApplicationService.approveApplication(questId, applicationId, currentUser);
+    }
+
+    @PatchMapping("/quests/{questId}/applications/{applicationId}/decline")
+    public QuestApplicationResponseDTO declineApplication(
+            @PathVariable Long questId,
+            @PathVariable Long applicationId,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return questApplicationService.declineApplication(questId, applicationId, currentUser);
     }
 
 }

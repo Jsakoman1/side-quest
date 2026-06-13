@@ -8,7 +8,7 @@ import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.service.QuestService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,8 +23,7 @@ public class QuestController {
     private final QuestMgr questMgr;
 
     @PostMapping
-    public QuestResponseDTO createQuest(@Valid @RequestBody QuestRequestDTO dto, Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
+    public QuestResponseDTO createQuest(@Valid @RequestBody QuestRequestDTO dto, @AuthenticationPrincipal AppUser currentUser) {
         Quest saved = questService.createQuest(dto, currentUser);
         return questMgr.toDto(saved);
     }
@@ -44,36 +43,26 @@ public class QuestController {
     }
 
     @DeleteMapping("/{id}")
-    public void deleteQuest(@PathVariable long id, Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
+    public void deleteQuest(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
         questService.deleteQuest(id, currentUser);
     }
 
     @PutMapping("/{id}")
-    public QuestResponseDTO updateQuest(@PathVariable long id, @Valid @RequestBody QuestRequestDTO dto, Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
+    public QuestResponseDTO updateQuest(@PathVariable long id, @Valid @RequestBody QuestRequestDTO dto, @AuthenticationPrincipal AppUser currentUser) {
         Quest quest = questService.updateQuest(id, dto, currentUser);
         return questMgr.toDto(quest);
     }
 
     @PatchMapping("/{id}/start")
-    public QuestResponseDTO startQuest(@PathVariable long id, Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
+    public QuestResponseDTO startQuest(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
         Quest quest = questService.startQuest(id, currentUser);
         return questMgr.toDto(quest);
     }
 
     @PatchMapping("/{id}/complete")
-    public QuestResponseDTO completeQuest(@PathVariable long id, Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
+    public QuestResponseDTO completeQuest(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
         Quest quest = questService.completeQuest(id, currentUser);
         return questMgr.toDto(quest);
     }
 
-    @PatchMapping("/{id}/cancel")
-    public QuestResponseDTO cancelQuest(@PathVariable long id, Authentication authentication) {
-        AppUser currentUser = (AppUser) authentication.getPrincipal();
-        Quest quest = questService.cancelQuest(id, currentUser);
-        return questMgr.toDto(quest);
-    }
 }

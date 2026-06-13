@@ -5,8 +5,6 @@ import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.model.Quest;
-import com.sidequest.sidequest.model.QuestApplication;
-import com.sidequest.sidequest.model.QuestApplicationStatus;
 import com.sidequest.sidequest.model.QuestStatus;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.QuestApplicationRepository;
@@ -56,9 +54,11 @@ public class QuestService {
         return findQuestOrThrow(id);
     }
 
+    @Transactional
     public void deleteQuest(Long id, AppUser currentUser) {
         Quest quest = findQuestOrThrow(id);
         validateQuestOwnerOrAdmin(quest, currentUser);
+        questApplicationRepository.deleteByQuestId(id);
         questRepository.deleteById(id);
     }
 
@@ -83,7 +83,7 @@ public class QuestService {
     public Quest startQuest(Long id, AppUser currentUser) {
         Quest quest = findQuestOrThrow(id);
         validateQuestOwnerOrAdmin(quest, currentUser);
-        validateQuestStatus(quest, QuestStatus.ASSIGNED, "Quest can only be started after an application is accepted");
+        validateQuestStatus(quest, QuestStatus.ASSIGNED, "Quest can only be started after an application is approved");
         quest.setStatus(QuestStatus.IN_PROGRESS);
         return questRepository.save(quest);
     }
@@ -94,48 +94,6 @@ public class QuestService {
         validateQuestOwnerOrAdmin(quest, currentUser);
         validateQuestStatus(quest, QuestStatus.IN_PROGRESS, "Quest can only be completed while it is in progress");
         quest.setStatus(QuestStatus.COMPLETED);
-        return questRepository.save(quest);
-    }
-
-    @Transactional
-    public Quest cancelQuest(Long id, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(id);
-        validateQuestOwnerOrAdmin(quest, currentUser);
-        if (quest.getStatus() == QuestStatus.COMPLETED || quest.getStatus() == QuestStatus.CANCELLED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quest is already finished");
-        }
-
-        quest.setStatus(QuestStatus.CANCELLED);
-        rejectPendingApplications(quest);
-        return questRepository.save(quest);
-    }
-
-    public Quest startQuest(Long id, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(id);
-        validateQuestOwner(quest, currentUser);
-        validateQuestStatus(quest, QuestStatus.ASSIGNED, "Quest can only be started after it has been assigned");
-
-        quest.setStatus(QuestStatus.IN_PROGRESS);
-        return questRepository.save(quest);
-    }
-
-    public Quest completeQuest(Long id, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(id);
-        validateQuestOwner(quest, currentUser);
-        validateQuestStatus(quest, QuestStatus.IN_PROGRESS, "Quest can only be completed after it is in progress");
-
-        quest.setStatus(QuestStatus.COMPLETED);
-        return questRepository.save(quest);
-    }
-
-    @Transactional
-    public Quest cancelQuest(Long id, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(id);
-        validateQuestOwner(quest, currentUser);
-        validateQuestNotTerminal(quest);
-
-        quest.setStatus(QuestStatus.CANCELLED);
-        rejectPendingApplications(quest);
         return questRepository.save(quest);
     }
 
@@ -161,18 +119,6 @@ public class QuestService {
     private void validateQuestStatus(Quest quest, QuestStatus requiredStatus, String message) {
         if (quest.getStatus() != requiredStatus) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
-        }
-    }
-
-    private void rejectPendingApplications(Quest quest) {
-        List<QuestApplication> pendingApplications = questApplicationRepository.findByQuestIdAndStatus(
-                quest.getId(),
-                QuestApplicationStatus.PENDING
-        );
-
-        for (QuestApplication application : pendingApplications) {
-            application.setStatus(QuestApplicationStatus.REJECTED);
-            questApplicationRepository.save(application);
         }
     }
 

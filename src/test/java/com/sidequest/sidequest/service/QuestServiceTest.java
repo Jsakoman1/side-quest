@@ -4,8 +4,6 @@ import com.sidequest.sidequest.dto.QuestRequestDTO;
 import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.Quest;
-import com.sidequest.sidequest.model.QuestApplication;
-import com.sidequest.sidequest.model.QuestApplicationStatus;
 import com.sidequest.sidequest.model.QuestStatus;
 import com.sidequest.sidequest.repository.QuestApplicationRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
@@ -18,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -155,27 +152,18 @@ class QuestServiceTest {
     }
 
     @Test
-    void cancelQuestMovesQuestToCancelledAndRejectsPendingApplications() {
+    void deleteQuestDeletesQuestAndApplicationsWhenAuthenticatedUserIsOwner() {
         AppUser creator = createUser(1L, "creator");
         Quest quest = new Quest();
-        quest.setId(13L);
+        quest.setId(14L);
         quest.setCreator(creator);
-        quest.setStatus(QuestStatus.IN_PROGRESS);
 
-        QuestApplication application = new QuestApplication();
-        application.setId(31L);
-        application.setQuest(quest);
-        application.setStatus(QuestApplicationStatus.PENDING);
+        when(questRepository.findById(14L)).thenReturn(Optional.of(quest));
 
-        when(questRepository.findById(13L)).thenReturn(Optional.of(quest));
-        when(questApplicationRepository.findByQuestIdAndStatus(13L, QuestApplicationStatus.PENDING)).thenReturn(List.of(application));
-        when(questRepository.save(quest)).thenReturn(quest);
-        when(questApplicationRepository.save(application)).thenReturn(application);
+        questService.deleteQuest(14L, creator);
 
-        questService.cancelQuest(13L, creator);
-
-        assertEquals(QuestStatus.CANCELLED, quest.getStatus());
-        assertEquals(QuestApplicationStatus.REJECTED, application.getStatus());
+        verify(questApplicationRepository).deleteByQuestId(14L);
+        verify(questRepository).deleteById(14L);
     }
 
     private AppUser createUser(Long id, String username) {
