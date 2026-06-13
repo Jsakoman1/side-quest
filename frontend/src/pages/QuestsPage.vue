@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import {onMounted} from "vue"
 import {useRouter} from "vue-router"
-import DashboardAdmin from "../components/dashboard/DashboardAdmin.vue"
 import DashboardFindQuests from "../components/dashboard/DashboardFindQuests.vue"
-import DashboardHeader from "../components/dashboard/DashboardHeader.vue"
 import DashboardMyApplications from "../components/dashboard/DashboardMyApplications.vue"
 import DashboardMyQuests from "../components/dashboard/DashboardMyQuests.vue"
 import DashboardOverview from "../components/dashboard/DashboardOverview.vue"
 import DashboardPostWork from "../components/dashboard/DashboardPostWork.vue"
 import DashboardProfile from "../components/dashboard/DashboardProfile.vue"
 import DashboardSidebar from "../components/dashboard/DashboardSidebar.vue"
+import DashboardEditSheet from "../components/dashboard/DashboardEditSheet.vue"
+import DashboardQuestDialog from "../components/dashboard/DashboardQuestDialog.vue"
+import DashboardApplicationDialog from "../components/dashboard/DashboardApplicationDialog.vue"
 import UiDialog from "../components/ui/UiDialog.vue"
 import {logoutUser} from "../auth.ts"
 import {useQuestDashboard} from "../composables/useQuestDashboard.ts"
@@ -31,11 +32,11 @@ onMounted(dashboard.init)
       <DashboardSidebar :dashboard="dashboard" :on-logout="handleLogout" />
 
       <main class="dashboard-main">
-        <DashboardHeader :dashboard="dashboard" />
-
-        <div v-if="dashboard.feedback" :class="['alert', dashboard.feedbackType === 'error' ? 'alert--error' : 'alert--success']">
-          {{ dashboard.feedback }}
-        </div>
+        <Transition name="toast">
+          <div v-if="dashboard.feedback" :class="['dashboard-toast', dashboard.feedbackType === 'error' ? 'dashboard-toast--error' : 'dashboard-toast--success']">
+            {{ dashboard.feedback }}
+          </div>
+        </Transition>
 
         <div v-if="dashboard.questsError" class="alert alert--error">
           <div>{{ dashboard.questsError }}</div>
@@ -95,7 +96,6 @@ onMounted(dashboard.init)
         <DashboardFindQuests v-else-if="dashboard.activeTab === 'find-quests'" :dashboard="dashboard" />
         <DashboardMyApplications v-else-if="dashboard.activeTab === 'my-applications'" :dashboard="dashboard" />
         <DashboardProfile v-else-if="dashboard.activeTab === 'profile'" :dashboard="dashboard" />
-        <DashboardAdmin v-else-if="dashboard.activeTab === 'admin'" :dashboard="dashboard" />
 
         <UiDialog
           :open="dashboard.isProfileEditDialogOpen"
@@ -103,22 +103,31 @@ onMounted(dashboard.init)
           subtitle="Update your username."
           @close="dashboard.closeProfileEditDialog"
         >
-          <form class="stack" @submit.prevent="dashboard.saveProfile">
-            <div class="field">
-              <span class="label">Email</span>
-              <strong>{{ dashboard.currentUser?.email }}</strong>
-            </div>
+          <form @submit.prevent="dashboard.saveProfile">
+            <DashboardEditSheet
+              :minimal="true"
+            >
+              <div class="dashboard-edit-form dashboard-edit-form--profile">
+                <div class="field dashboard-edit-field dashboard-edit-field--profile-email">
+                  <span class="label">Email</span>
+                  <strong>{{ dashboard.currentUser?.email }}</strong>
+                </div>
 
-            <label class="field">
-              <span class="label">Username</span>
-              <input v-model="dashboard.profileUsername" class="input" />
-            </label>
+                <label class="field dashboard-edit-field dashboard-edit-field--profile-username">
+                  <span class="label">Username</span>
+                  <input v-model="dashboard.profileUsername" class="input" />
+                </label>
+              </div>
 
-            <div class="button-row">
-              <button class="button" type="submit">Save profile</button>
-            </div>
+              <template #actions>
+                <button class="button button--action" type="submit">Save changes</button>
+              </template>
+            </DashboardEditSheet>
           </form>
         </UiDialog>
+
+        <DashboardQuestDialog :dashboard="dashboard" />
+        <DashboardApplicationDialog :dashboard="dashboard" />
       </main>
     </div>
   </div>

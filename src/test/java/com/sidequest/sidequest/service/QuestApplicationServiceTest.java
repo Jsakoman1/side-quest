@@ -127,43 +127,41 @@ class QuestApplicationServiceTest {
     }
 
     @Test
-    void acceptApplicationSetsApplicationAndQuestStatus() {
+    void approveApplicationSetsApplicationAndQuestStatus() {
         AppUser creator = createUser(1L, "creator");
         AppUser applicant = createUser(2L, "applicant");
         AppUser otherApplicant = createUser(3L, "other");
         Quest quest = createQuest(7L, creator, QuestStatus.OPEN);
-        QuestApplication acceptedApplication = createApplication(11L, quest, applicant, QuestApplicationStatus.PENDING);
+        QuestApplication approvedApplication = createApplication(11L, quest, applicant, QuestApplicationStatus.PENDING);
         QuestApplication otherApplication = createApplication(12L, quest, otherApplicant, QuestApplicationStatus.PENDING);
         QuestApplicationResponseDTO responseDTO = QuestApplicationResponseDTO.builder()
                 .id(11L)
-                .status(QuestApplicationStatus.ACCEPTED)
+                .status(QuestApplicationStatus.APPROVED)
                 .build();
 
         when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
-        when(questApplicationRepository.findByIdAndQuestId(11L, 7L)).thenReturn(Optional.of(acceptedApplication));
-        when(questApplicationRepository.findByQuestIdAndStatus(7L, QuestApplicationStatus.PENDING)).thenReturn(List.of(acceptedApplication, otherApplication));
-        when(questApplicationRepository.save(acceptedApplication)).thenReturn(acceptedApplication);
-        when(questApplicationRepository.save(otherApplication)).thenReturn(otherApplication);
-        when(questRepository.save(quest)).thenReturn(quest);
-        when(questApplicationMgr.toDto(acceptedApplication)).thenReturn(responseDTO);
+        when(questApplicationRepository.findByIdAndQuestId(11L, 7L)).thenReturn(Optional.of(approvedApplication));
+        when(questApplicationRepository.findByQuestIdAndStatus(7L, QuestApplicationStatus.PENDING)).thenReturn(List.of(approvedApplication, otherApplication));
+        when(questApplicationRepository.save(approvedApplication)).thenReturn(approvedApplication);
+        when(questApplicationMgr.toDto(approvedApplication)).thenReturn(responseDTO);
 
-        QuestApplicationResponseDTO result = questApplicationService.acceptApplication(7L, 11L, creator);
+        QuestApplicationResponseDTO result = questApplicationService.approveApplication(7L, 11L, creator);
 
-        assertEquals(QuestApplicationStatus.ACCEPTED, result.getStatus());
+        assertEquals(QuestApplicationStatus.APPROVED, result.getStatus());
         assertEquals(QuestStatus.ASSIGNED, quest.getStatus());
-        assertEquals(QuestApplicationStatus.ACCEPTED, acceptedApplication.getStatus());
-        assertEquals(QuestApplicationStatus.REJECTED, otherApplication.getStatus());
+        assertEquals(QuestApplicationStatus.APPROVED, approvedApplication.getStatus());
+        assertEquals(QuestApplicationStatus.DECLINED, otherApplication.getStatus());
     }
 
     @Test
-    void rejectApplicationSetsStatusToRejected() {
+    void declineApplicationSetsStatusToDeclined() {
         AppUser creator = createUser(1L, "creator");
         AppUser applicant = createUser(2L, "applicant");
         Quest quest = createQuest(7L, creator, QuestStatus.OPEN);
         QuestApplication application = createApplication(11L, quest, applicant, QuestApplicationStatus.PENDING);
         QuestApplicationResponseDTO responseDTO = QuestApplicationResponseDTO.builder()
                 .id(11L)
-                .status(QuestApplicationStatus.REJECTED)
+                .status(QuestApplicationStatus.DECLINED)
                 .build();
 
         when(questRepository.findById(7L)).thenReturn(Optional.of(quest));
@@ -171,10 +169,43 @@ class QuestApplicationServiceTest {
         when(questApplicationRepository.save(application)).thenReturn(application);
         when(questApplicationMgr.toDto(application)).thenReturn(responseDTO);
 
-        QuestApplicationResponseDTO result = questApplicationService.rejectApplication(7L, 11L, creator);
+        QuestApplicationResponseDTO result = questApplicationService.declineApplication(7L, 11L, creator);
 
-        assertEquals(QuestApplicationStatus.REJECTED, result.getStatus());
-        assertEquals(QuestApplicationStatus.REJECTED, application.getStatus());
+        assertEquals(QuestApplicationStatus.DECLINED, result.getStatus());
+        assertEquals(QuestApplicationStatus.DECLINED, application.getStatus());
+    }
+
+    @Test
+    void withdrawMyApplicationSetsStatusToWithdrawn() {
+        AppUser creator = createUser(1L, "creator");
+        AppUser applicant = createUser(2L, "applicant");
+        Quest quest = createQuest(7L, creator, QuestStatus.OPEN);
+        QuestApplication application = createApplication(11L, quest, applicant, QuestApplicationStatus.PENDING);
+        QuestApplicationResponseDTO responseDTO = QuestApplicationResponseDTO.builder()
+                .id(11L)
+                .status(QuestApplicationStatus.WITHDRAWN)
+                .build();
+
+        when(questApplicationRepository.findByQuestIdAndApplicantId(7L, 2L)).thenReturn(Optional.of(application));
+        when(questApplicationRepository.save(application)).thenReturn(application);
+        when(questApplicationMgr.toDto(application)).thenReturn(responseDTO);
+
+        QuestApplicationResponseDTO result = questApplicationService.withdrawMyApplication(7L, applicant);
+
+        assertEquals(QuestApplicationStatus.WITHDRAWN, result.getStatus());
+        assertEquals(QuestApplicationStatus.WITHDRAWN, application.getStatus());
+    }
+
+    @Test
+    void withdrawMyApplicationThrowsWhenApplicationIsNotPending() {
+        AppUser creator = createUser(1L, "creator");
+        AppUser applicant = createUser(2L, "applicant");
+        Quest quest = createQuest(7L, creator, QuestStatus.OPEN);
+        QuestApplication application = createApplication(11L, quest, applicant, QuestApplicationStatus.APPROVED);
+
+        when(questApplicationRepository.findByQuestIdAndApplicantId(7L, 2L)).thenReturn(Optional.of(application));
+
+        assertThrows(ResponseStatusException.class, () -> questApplicationService.withdrawMyApplication(7L, applicant));
     }
 
     private AppUser createUser(Long id, String username) {

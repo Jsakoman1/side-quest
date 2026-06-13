@@ -81,28 +81,43 @@ public class QuestApplicationService {
     }
 
     @Transactional
-    public QuestApplicationResponseDTO acceptApplication(Long questId, Long applicationId, AppUser currentUser) {
-        Quest quest = findQuestOrThrow(questId);
-        validateQuestOwnerOrAdmin(quest, currentUser);
-        validateQuestIsOpen(quest);
+    public QuestApplicationResponseDTO withdrawMyApplication(Long questId, AppUser currentUser) {
+        QuestApplication application = questApplicationRepository.findByQuestIdAndApplicantId(questId, currentUser.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest application not found for current user"));
 
-        QuestApplication application = findPendingApplicationOrThrow(questId, applicationId);
-        application.setStatus(QuestApplicationStatus.ACCEPTED);
-        quest.setStatus(QuestStatus.ASSIGNED);
+        if (application.getStatus() != QuestApplicationStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending applications can be withdrawn");
+        }
 
-        rejectOtherPendingApplications(questId, applicationId);
+        application.setStatus(QuestApplicationStatus.WITHDRAWN);
         questApplicationRepository.save(application);
         return questApplicationMgr.toDto(application);
     }
 
     @Transactional
-    public QuestApplicationResponseDTO rejectApplication(Long questId, Long applicationId, AppUser currentUser) {
+    public QuestApplicationResponseDTO approveApplication(Long questId, Long applicationId, AppUser currentUser) {
         Quest quest = findQuestOrThrow(questId);
         validateQuestOwnerOrAdmin(quest, currentUser);
         validateQuestIsOpen(quest);
 
         QuestApplication application = findPendingApplicationOrThrow(questId, applicationId);
-        application.setStatus(QuestApplicationStatus.REJECTED);
+        application.setStatus(QuestApplicationStatus.APPROVED);
+        quest.setStatus(QuestStatus.ASSIGNED);
+
+        declineOtherPendingApplications(questId, applicationId);
+        questRepository.save(quest);
+        questApplicationRepository.save(application);
+        return questApplicationMgr.toDto(application);
+    }
+
+    @Transactional
+    public QuestApplicationResponseDTO declineApplication(Long questId, Long applicationId, AppUser currentUser) {
+        Quest quest = findQuestOrThrow(questId);
+        validateQuestOwnerOrAdmin(quest, currentUser);
+        validateQuestIsOpen(quest);
+
+        QuestApplication application = findPendingApplicationOrThrow(questId, applicationId);
+        application.setStatus(QuestApplicationStatus.DECLINED);
         questApplicationRepository.save(application);
         return questApplicationMgr.toDto(application);
     }
@@ -123,13 +138,18 @@ public class QuestApplicationService {
         return application;
     }
 
-    private void rejectOtherPendingApplications(Long questId, Long acceptedApplicationId) {
+    private void declineOtherPendingApplications(Long questId, Long approvedApplicationId) {
         List<QuestApplication> pendingApplications = questApplicationRepository.findByQuestIdAndStatus(questId, QuestApplicationStatus.PENDING);
+        List<QuestApplication> declinedApplications = new java.util.ArrayList<>();
         for (QuestApplication application : pendingApplications) {
-            if (!Objects.equals(application.getId(), acceptedApplicationId)) {
-                application.setStatus(QuestApplicationStatus.REJECTED);
-                questApplicationRepository.save(application);
+            if (!Objects.equals(application.getId(), approvedApplicationId)) {
+                application.setStatus(QuestApplicationStatus.DECLINED);
+                declinedApplications.add(application);
             }
+        }
+
+        if (!declinedApplications.isEmpty()) {
+            questApplicationRepository.saveAll(declinedApplications);
         }
     }
 
@@ -158,27 +178,6 @@ public class QuestApplicationService {
 
         if (!quest.getCreator().getId().equals(currentUser.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not allowed to view these applications");
-        }
-    }
-
-    private QuestApplication findPendingApplicationOrThrow(Long questId, Long applicationId) {
-        QuestApplication application = questApplicationRepository.findByIdAndQuestId(applicationId, questId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quest application not found with id " + applicationId));
-
-        if (application.getStatus() != QuestApplicationStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending applications can be updated");
-        }
-
-        return application;
-    }
-
-    private void rejectOtherPendingApplications(Long questId, Long acceptedApplicationId) {
-        List<QuestApplication> pendingApplications = questApplicationRepository.findByQuestIdAndStatus(questId, QuestApplicationStatus.PENDING);
-        for (QuestApplication application : pendingApplications) {
-            if (!Objects.equals(application.getId(), acceptedApplicationId)) {
-                application.setStatus(QuestApplicationStatus.REJECTED);
-                questApplicationRepository.save(application);
-            }
         }
     }
 

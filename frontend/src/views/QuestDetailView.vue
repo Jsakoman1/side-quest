@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import {onMounted} from "vue"
+import {ref, onMounted} from "vue"
 import {useQuestDetailPage} from "../composables/useQuestDetailPage.ts"
+import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
 
 const {
   router,
@@ -13,9 +14,51 @@ const {
   isSaving,
   isOwner,
   updateStatus,
+  deleteQuest,
   copyDebugInfo,
   init
 } = useQuestDetailPage()
+
+const actionMessage = ref("")
+const actionMessageTone = ref<"success" | "warning">("success")
+const isDeleting = ref(false)
+let actionMessageTimeout: number | undefined
+
+const setActionMessage = (message: string, tone: "success" | "warning" = "success") => {
+  if (actionMessageTimeout !== undefined) {
+    window.clearTimeout(actionMessageTimeout)
+  }
+
+  actionMessage.value = message
+  actionMessageTone.value = tone
+  actionMessageTimeout = window.setTimeout(() => {
+    actionMessage.value = ""
+  }, 1800)
+}
+
+const handleDeleteQuest = () => {
+  const confirmed = window.confirm("Are you sure you want to delete this quest? This cannot be undone.")
+  if (!confirmed) {
+    return
+  }
+
+  isDeleting.value = true
+  setActionMessage("Deleting quest...", "warning")
+
+  void (async () => {
+    const deleted = await deleteQuest()
+    if (!deleted) {
+      isDeleting.value = false
+      return
+    }
+
+    setActionMessage("Quest deleted.")
+    window.setTimeout(() => {
+      router.push("/quests")
+      isDeleting.value = false
+    }, 900)
+  })()
+}
 
 onMounted(init)
 </script>
@@ -34,6 +77,8 @@ onMounted(init)
         </button>
       </div>
     </div>
+
+    <UiStatusBanner :message="actionMessage" :tone="actionMessageTone" />
 
     <div v-if="error" class="alert alert--error">
       <div>{{ error }}</div>
@@ -109,10 +154,10 @@ onMounted(init)
             v-if="quest.status !== 'COMPLETED' && quest.status !== 'CANCELLED'"
             class="button button--danger"
             type="button"
-            :disabled="isSaving"
-            @click="updateStatus('cancel')"
+            :disabled="isSaving || isDeleting"
+            @click="handleDeleteQuest"
           >
-            Cancel
+            Delete
           </button>
         </div>
       </div>

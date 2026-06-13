@@ -20,4 +20,8 @@ public interface QuestApplicationRepository extends JpaRepository<QuestApplicati
     Optional<QuestApplication> findByIdAndQuestId(Long id, Long questId);
 
     List<QuestApplication> findByQuestIdAndStatus(Long questId, QuestApplicationStatus status);
+
+    boolean existsByQuestId(Long questId);
+
+    void deleteByQuestId(Long questId);
 }

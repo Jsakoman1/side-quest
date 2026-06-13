@@ -1,145 +1,88 @@
 <script setup lang="ts">
-import {onBeforeUnmount, onMounted, ref} from "vue"
+import DashboardQuestSummaryRow from "./DashboardQuestSummaryRow.vue"
+import DashboardSectionHeader from "./DashboardSectionHeader.vue"
+import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 
-const props = defineProps<{
-  dashboard: any
+defineProps<{
+  dashboard: QuestDashboard
 }>()
-
-const overviewRef = ref<HTMLElement | null>(null)
-
-const closeOnOutsideClick = (event: MouseEvent) => {
-  if (!props.dashboard.overviewFocus) {
-    return
-  }
-
-  const target = event.target as Node | null
-  if (overviewRef.value && target && !overviewRef.value.contains(target)) {
-    props.dashboard.clearOverviewFocus()
-  }
-}
-
-onMounted(() => {
-  document.addEventListener("click", closeOnOutsideClick)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener("click", closeOnOutsideClick)
-})
 </script>
 
 <template>
-  <section ref="overviewRef" class="stack">
-    <article
-      v-for="card in dashboard.overviewCards"
-      :key="card.id"
-      :class="['overview-card panel', { 'overview-card--active': dashboard.overviewFocus === card.id }]"
-    >
-      <button type="button" class="overview-card__trigger" @click="dashboard.toggleOverviewFocus(card.id)">
-        <div class="overview-card__top">
-          <span class="overview-card__label">{{ card.label }}</span>
-          <span class="overview-card__arrow">{{ dashboard.overviewFocus === card.id ? "−" : "+" }}</span>
+  <section class="overview-grid">
+    <div class="overview-panels">
+      <article class="card overview-panel overview-panel--my-work overview-panel--compact">
+        <DashboardSectionHeader
+          title="Your Quests"
+          clickable
+          @click="dashboard.clearOverviewFocus(); dashboard.goToTab('my-quests')"
+        />
+
+        <div v-if="dashboard.myQuests.length" class="overview-scroll mt-2">
+          <button
+            v-for="quest in dashboard.myQuests"
+            :key="quest.id"
+            type="button"
+            class="compact-disclosure compact-disclosure--quest compact-disclosure--tight compact-disclosure--overview compact-disclosure--launch"
+            :class="[dashboard.statusSurfaceClass(quest.status), { 'ui-pulse': dashboard.successPulseTarget === `quest-${quest.id}` }]"
+            @click="dashboard.openQuestDialog(quest.id)"
+          >
+            <DashboardQuestSummaryRow
+              primary-label="Amount"
+              :primary-value="quest.awardAmount"
+              primary-icon="$"
+              money-tone="expense"
+              :title="quest.title"
+            >
+              <template #meta>
+                <span class="badge">{{ dashboard.formatStatus(quest.status) }}</span>
+              </template>
+            </DashboardQuestSummaryRow>
+          </button>
         </div>
-        <strong class="overview-card__value">{{ card.value }}</strong>
-      </button>
 
-      <Transition name="sheet-fade">
-        <div v-if="dashboard.overviewFocus === card.id" class="overview-card__body">
-          <div v-if="card.id === 'posted-work'">
-            <div class="card__header">
-              <div>
-                <h2 class="card__title">Posted work</h2>
-                <p class="muted mt-2">Quick look at your quests.</p>
-              </div>
-              <button class="button button--secondary" type="button" @click="dashboard.goToTab('my-quests')">Open</button>
-            </div>
-
-            <div class="grid grid--three">
-              <div class="mini-stat">
-                <span class="label">Open</span>
-                <strong>{{ dashboard.countMyQuestsByStatus("OPEN") }}</strong>
-              </div>
-              <div class="mini-stat">
-                <span class="label">Active</span>
-                <strong>{{ dashboard.countMyQuestsByStatus("ASSIGNED") + dashboard.countMyQuestsByStatus("IN_PROGRESS") }}</strong>
-              </div>
-              <div class="mini-stat">
-                <span class="label">Done</span>
-                <strong>{{ dashboard.countMyQuestsByStatus("COMPLETED") }}</strong>
-              </div>
-            </div>
-
-            <div v-if="dashboard.recentMyQuests.length" class="compact-list mt-4">
-              <div v-for="quest in dashboard.recentMyQuests" :key="quest.id" class="compact-row">
-                <div>
-                  <strong>{{ quest.title }}</strong>
-                  <div class="muted mt-1 text-clamp">{{ quest.description }}</div>
-                </div>
-                <span :class="dashboard.statusBadgeClass(quest.status)">{{ dashboard.formatStatus(quest.status) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-else-if="card.id === 'applied-tasks'">
-            <div class="card__header">
-              <div>
-                <h2 class="card__title">Applied tasks</h2>
-                <p class="muted mt-2">Track where you applied.</p>
-              </div>
-              <button class="button button--secondary" type="button" @click="dashboard.goToTab('my-applications')">Open</button>
-            </div>
-
-            <div class="grid grid--three">
-              <div class="mini-stat">
-                <span class="label">Total</span>
-                <strong>{{ dashboard.sortedMyApplications.length }}</strong>
-              </div>
-              <div class="mini-stat">
-                <span class="label">Pending</span>
-                <strong>{{ dashboard.countMyApplicationsByStatus("PENDING") }}</strong>
-              </div>
-              <div class="mini-stat">
-                <span class="label">Accepted</span>
-                <strong>{{ dashboard.countMyApplicationsByStatus("ACCEPTED") }}</strong>
-              </div>
-            </div>
-
-            <div v-if="dashboard.recentMyApplications.length" class="compact-list mt-4">
-              <div v-for="application in dashboard.recentMyApplications" :key="application.id" class="compact-row">
-                <div>
-                  <strong>{{ application.questTitle }}</strong>
-                  <div class="muted mt-1 text-clamp">{{ application.questDescription }}</div>
-                </div>
-                <span :class="dashboard.statusBadgeClass(application.status)">{{ dashboard.formatStatus(application.status) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-else>
-            <div class="card__header">
-              <div>
-                <h2 class="card__title">Completed</h2>
-                <p class="muted mt-2">Finished work at a glance.</p>
-              </div>
-              <button class="button button--secondary" type="button" @click="dashboard.goToTab('my-quests')">Open</button>
-            </div>
-
-            <div class="grid grid--three">
-              <div class="mini-stat">
-                <span class="label">Completed quests</span>
-                <strong>{{ dashboard.countMyQuestsByStatus("COMPLETED") }}</strong>
-              </div>
-              <div class="mini-stat">
-                <span class="label">Total posted</span>
-                <strong>{{ dashboard.myQuests.length }}</strong>
-              </div>
-              <div class="mini-stat">
-                <span class="label">Still open</span>
-                <strong>{{ dashboard.countMyQuestsByStatus("OPEN") }}</strong>
-              </div>
-            </div>
-          </div>
+        <div v-else class="empty-state mt-3">
+          No posted work yet.
         </div>
-      </Transition>
-    </article>
+      </article>
+
+      <article class="card overview-panel overview-panel--applied-work overview-panel--compact">
+        <DashboardSectionHeader
+          title="Applications you sent"
+          clickable
+          @click="dashboard.clearOverviewFocus(); dashboard.goToTab('my-applications')"
+        />
+
+        <div v-if="dashboard.sortedMyApplications.length" class="overview-scroll mt-2">
+          <button
+            v-for="application in dashboard.sortedMyApplications"
+            :key="application.id"
+            type="button"
+            class="compact-disclosure compact-disclosure--tight compact-disclosure--overview compact-disclosure--launch"
+            :class="[dashboard.statusSurfaceClass(application.status), { 'ui-pulse': dashboard.successPulseTarget === `application-${application.id}` }]"
+            @click="dashboard.openApplicationDialog(application.id)"
+          >
+            <DashboardQuestSummaryRow
+              primary-label="Creator"
+              :primary-value="dashboard.questCreatorUsernameForQuest(application.questId)"
+              secondary-label="Price"
+              :secondary-value="application.proposedPrice"
+              secondary-icon="$"
+              money-tone="income"
+              :title="application.questTitle"
+              :description="application.questDescription"
+            >
+              <template #meta>
+                <span :class="dashboard.statusBadgeClass(application.status)">{{ dashboard.formatApplicationStatus(application.status) }}</span>
+              </template>
+            </DashboardQuestSummaryRow>
+          </button>
+        </div>
+
+        <div v-else class="empty-state mt-3">
+          No applications yet.
+        </div>
+      </article>
+    </div>
   </section>
 </template>
