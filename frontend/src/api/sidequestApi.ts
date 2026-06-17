@@ -21,6 +21,8 @@ export interface Quest {
   id: number
   creatorId: number
   creatorUsername: string
+  creatorProfileDescription: string | null
+  creatorProfileAvatarDataUrl: string | null
   title: string
   description: string
   awardAmount: number
@@ -39,6 +41,8 @@ export interface QuestApplication {
   questDescription: string
   applicantId: number
   applicantUsername: string
+  applicantProfileDescription: string | null
+  applicantProfileAvatarDataUrl: string | null
   message: string
   proposedPrice: number
   status: QuestApplicationStatus
@@ -49,6 +53,10 @@ export interface AppUser {
   id: number
   email: string
   username: string
+  profileDescription: string | null
+  profileAvatarDataUrl: string | null
+  openQuestCount: number
+  openQuests: Quest[]
   role: AppUserRole
 }
 
@@ -85,6 +93,8 @@ export interface AppUserRequest {
   email: string
   username: string
   password?: string
+  profileDescription?: string | null
+  profileAvatarDataUrl?: string | null
   role?: AppUserRole
 }
 
@@ -171,6 +181,10 @@ export const sidequestApi = {
 
   async getAppUsers(): Promise<AppUser[]> {
     return (await api.get<AppUser[]>("/app_users", withAuth())).data
+  },
+
+  async getAppUser(id: number): Promise<AppUser> {
+    return (await api.get<AppUser>(`/app_users/${id}`, withAuth())).data
   },
 
   async createAppUser(dto: AppUserRequest): Promise<AppUser> {

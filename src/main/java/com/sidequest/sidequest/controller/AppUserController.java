@@ -38,6 +38,17 @@ public class AppUserController {
         return toDto(currentUser);
     }
 
+    @GetMapping("/{id}")
+    public AppUserResponseDTO getAppUser(@PathVariable long id) {
+        AppUser appUser = appUserService.getAppUser(id);
+        AppUserResponseDTO dto = toDto(appUser);
+        return appUserMgr.withProfileStats(
+                dto,
+                appUserService.countQuestsByCreatorId(appUser.getId()),
+                appUserService.getOpenQuestsByCreatorId(appUser.getId())
+        );
+    }
+
     @DeleteMapping("/{id}")
     public void deleteAppUser(@PathVariable long id) {
         appUserService.deleteUser(id);

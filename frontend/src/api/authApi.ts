@@ -10,6 +10,8 @@ export interface AuthResponse {
   id: number
   email: string
   username: string
+  profileDescription: string | null
+  profileAvatarDataUrl: string | null
   role: AppUserRole
   token: string
 }

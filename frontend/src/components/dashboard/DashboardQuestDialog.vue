@@ -3,6 +3,8 @@ import {computed, ref, watch} from "vue"
 import UiDialog from "../ui/UiDialog.vue"
 import DashboardEditSheet from "./DashboardEditSheet.vue"
 import UiStatusBanner from "../ui/UiStatusBanner.vue"
+import ProfileAvatar from "../profile/ProfileAvatar.vue"
+import ProfileBio from "../profile/ProfileBio.vue"
 import {useTimedBanner} from "../../composables/useTimedBanner.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 
@@ -235,6 +237,19 @@ const rejectTermChange = () => {
         <div class="dialog-sheet__meta">
           <span v-if="!props.dashboard.isMyQuest(quest) || props.dashboard.isAdmin()" class="badge">Creator: {{ quest.creatorUsername }}</span>
         </div>
+        <div class="dialog-profile-card">
+          <div class="profile-card__identity">
+            <RouterLink class="profile-link" :to="`/users/${quest.creatorId}`">
+              <ProfileAvatar
+                :username="quest.creatorUsername"
+                :avatar-data-url="quest.creatorProfileAvatarDataUrl"
+                :size="72"
+              />
+              <strong>{{ quest.creatorUsername }}</strong>
+            </RouterLink>
+            <ProfileBio :text="quest.creatorProfileDescription" />
+          </div>
+        </div>
       </div>
 
       <UiStatusBanner :message="actionMessage" :tone="actionMessageTone" />
@@ -356,10 +371,24 @@ const rejectTermChange = () => {
       <div v-else-if="quest.status !== 'CANCELLED'" class="stack dialog-sheet__section">
         <div v-if="approvedApplication" class="dialog-application-card dialog-application-card--selected">
           <div class="dialog-application-card__top">
-            <strong>Selected applicant</strong>
+            <div class="dialog-application-card__identity">
+              <RouterLink class="profile-link" :to="`/users/${approvedApplication.applicantId}`">
+                <ProfileAvatar
+                  :username="approvedApplication.applicantUsername"
+                  :avatar-data-url="approvedApplication.applicantProfileAvatarDataUrl"
+                  :size="48"
+                />
+                <strong>Selected applicant</strong>
+              </RouterLink>
+            </div>
             <span class="badge badge--success">{{ props.dashboard.formatApplicationStatus(approvedApplication.status) }}</span>
           </div>
-          <p class="dialog-application-card__message">{{ approvedApplication.applicantUsername }}</p>
+          <p class="dialog-application-card__message">
+            <RouterLink class="profile-link profile-link--text" :to="`/users/${approvedApplication.applicantId}`">
+              {{ approvedApplication.applicantUsername }}
+            </RouterLink>
+          </p>
+          <ProfileBio :text="approvedApplication.applicantProfileDescription" />
           <div class="dialog-application-card__price">$ {{ approvedApplication.proposedPrice }}</div>
           <p class="dialog-application-card__message">{{ approvedApplication.message }}</p>
         </div>
@@ -369,9 +398,19 @@ const rejectTermChange = () => {
           <div v-if="applications.length" class="stack">
             <div v-for="application in applications" :key="application.id" class="dialog-application-card">
               <div class="dialog-application-card__top">
-                <strong>{{ application.applicantUsername }}</strong>
+                <div class="dialog-application-card__identity">
+                  <RouterLink class="profile-link" :to="`/users/${application.applicantId}`">
+                    <ProfileAvatar
+                      :username="application.applicantUsername"
+                      :avatar-data-url="application.applicantProfileAvatarDataUrl"
+                      :size="44"
+                    />
+                    <strong>{{ application.applicantUsername }}</strong>
+                  </RouterLink>
+                </div>
                 <span :class="props.dashboard.statusBadgeClass(application.status)">{{ props.dashboard.formatApplicationStatus(application.status) }}</span>
               </div>
+              <ProfileBio :text="application.applicantProfileDescription" />
               <p class="dialog-application-card__message">{{ application.message }}</p>
               <div class="dialog-application-card__price">$ {{ application.proposedPrice }}</div>
 

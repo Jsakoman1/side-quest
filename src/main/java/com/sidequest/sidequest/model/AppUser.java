@@ -20,6 +20,12 @@ public class AppUser {
     @Column(nullable = false)
     private String username;
 
+    @Column(length = 2000)
+    private String profileDescription;
+
+    @Column(columnDefinition = "TEXT")
+    private String profileAvatarDataUrl;
+
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 

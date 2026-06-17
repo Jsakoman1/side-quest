@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import {RouterLink} from "vue-router"
 import DashboardEditSheet from "../dashboard/DashboardEditSheet.vue"
 import type {AppUser} from "../../api/sidequestApi.ts"
 import {appUserRoleOptions, type AppUserRole} from "../../shared/sidequestDomain.ts"
+import ProfileAvatar from "../profile/ProfileAvatar.vue"
+import ProfileBio from "../profile/ProfileBio.vue"
 
 defineProps<{
   users: AppUser[]
@@ -28,10 +31,20 @@ defineEmits<{
   <div class="quest-list">
     <article v-for="user in users" :key="user.id" class="card">
       <div v-if="editingUserId !== user.id" class="split-actions">
-        <div>
-          <strong>{{ user.username }}</strong>
-          <div class="muted mt-1">{{ user.email }}</div>
-          <div class="badge badge--accent mt-2">{{ user.role }}</div>
+        <div class="profile-card__identity">
+          <RouterLink class="profile-link" :to="`/users/${user.id}`">
+            <ProfileAvatar
+              :username="user.username"
+              :avatar-data-url="user.profileAvatarDataUrl"
+              :size="56"
+            />
+            <strong>{{ user.username }}</strong>
+          </RouterLink>
+          <div class="stack">
+            <div class="muted mt-1">{{ user.email }}</div>
+            <div class="badge badge--accent mt-2">{{ user.role }}</div>
+            <ProfileBio :text="user.profileDescription" />
+          </div>
         </div>
 
         <div class="button-row">

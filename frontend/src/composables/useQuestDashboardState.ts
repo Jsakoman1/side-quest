@@ -67,6 +67,8 @@ export const useQuestDashboardState = () => {
   const questCreatorId = ref("")
 
   const profileUsername = ref("")
+  const profileDescription = ref(currentUser.value?.profileDescription ?? "")
+  const profileAvatarDataUrl = ref(currentUser.value?.profileAvatarDataUrl ?? "")
 
   const myQuestStatusFilter = ref<QuestStatusFilter>("ALL")
   const adminQuestStatusFilter = ref<QuestStatusFilter>("ALL")
@@ -315,6 +317,8 @@ export const useQuestDashboardState = () => {
     }
 
     profileUsername.value = currentUser.value.username
+    profileDescription.value = currentUser.value.profileDescription ?? ""
+    profileAvatarDataUrl.value = currentUser.value.profileAvatarDataUrl ?? ""
     isProfileEditDialogOpen.value = true
   }
 
@@ -574,6 +578,8 @@ export const useQuestDashboardState = () => {
     questTermFixed,
     questCreatorId,
     profileUsername,
+    profileDescription,
+    profileAvatarDataUrl,
     myQuestStatusFilter,
     adminQuestStatusFilter,
     applicationMessages,

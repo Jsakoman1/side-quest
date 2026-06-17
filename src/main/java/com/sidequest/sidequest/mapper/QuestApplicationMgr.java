@@ -33,6 +33,8 @@ public class QuestApplicationMgr {
                 .questDescription(application.getQuest().getDescription())
                 .applicantId(application.getApplicant().getId())
                 .applicantUsername(application.getApplicant().getUsername())
+                .applicantProfileDescription(application.getApplicant().getProfileDescription())
+                .applicantProfileAvatarDataUrl(application.getApplicant().getProfileAvatarDataUrl())
                 .message(application.getMessage())
                 .proposedPrice(application.getProposedPrice())
                 .status(application.getStatus())

@@ -5,6 +5,8 @@ export interface SessionUser {
   id: number
   email: string
   username: string
+  profileDescription: string | null
+  profileAvatarDataUrl: string | null
   role: AppUserRole
   token: string | null
 }
@@ -16,7 +18,20 @@ const loadUser = () => {
   }
 
   try {
-    return JSON.parse(storedUser) as SessionUser
+    const parsed = JSON.parse(storedUser) as Partial<SessionUser>
+    if (typeof parsed.id !== "number" || typeof parsed.email !== "string" || typeof parsed.username !== "string") {
+      return null
+    }
+
+    return {
+      id: parsed.id,
+      email: parsed.email,
+      username: parsed.username,
+      profileDescription: parsed.profileDescription ?? null,
+      profileAvatarDataUrl: parsed.profileAvatarDataUrl ?? null,
+      role: parsed.role ?? "USER",
+      token: parsed.token ?? null
+    }
   } catch {
     return null
   }

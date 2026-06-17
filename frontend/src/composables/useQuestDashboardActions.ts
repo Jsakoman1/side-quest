@@ -2,6 +2,7 @@ import {type QuestDashboardState} from "./useQuestDashboardState.ts"
 import {API_BASE_URL, sidequestApi} from "../api/sidequestApi.ts"
 import {buildRequestDebugInfo} from "../httpDebug.ts"
 import {isAdmin, currentUser} from "../auth.ts"
+import {compressProfileAvatar} from "../shared/imageCompression.ts"
 
 export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const refreshDashboardData = async () => {
@@ -359,23 +360,47 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     try {
       const response = await sidequestApi.updateCurrentAppUser({
         email: currentUser.value.email,
-        username: state.profileUsername.value.trim()
+        username: state.profileUsername.value.trim(),
+        profileDescription: state.profileDescription.value.trim(),
+        profileAvatarDataUrl: state.profileAvatarDataUrl.value || null
       })
 
       const updatedUser = {
         ...currentUser.value,
         email: response.email,
         username: response.username,
+        profileDescription: response.profileDescription,
+        profileAvatarDataUrl: response.profileAvatarDataUrl,
         role: response.role ?? currentUser.value.role
       }
 
       currentUser.value = updatedUser
+      state.profileUsername.value = response.username
+      state.profileDescription.value = response.profileDescription ?? ""
+      state.profileAvatarDataUrl.value = response.profileAvatarDataUrl ?? ""
       localStorage.setItem("user", JSON.stringify(updatedUser))
       state.showFeedback("Profile updated.", "success")
       state.closeProfileEditDialog()
     } catch {
       state.showFeedback("Could not update profile.", "error")
     }
+  }
+
+  const updateProfileAvatarFromFile = async (file: File | null) => {
+    if (!file) {
+      state.profileAvatarDataUrl.value = ""
+      return
+    }
+
+    try {
+      state.profileAvatarDataUrl.value = await compressProfileAvatar(file)
+    } catch {
+      state.showFeedback("Could not process profile image.", "error")
+    }
+  }
+
+  const clearProfileAvatar = () => {
+    state.profileAvatarDataUrl.value = ""
   }
 
   const init = async () => {
@@ -410,6 +435,8 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     saveEditedApplication,
     saveEditedQuest,
     saveProfile,
+    updateProfileAvatarFromFile,
+    clearProfileAvatar,
     init
   }
 }

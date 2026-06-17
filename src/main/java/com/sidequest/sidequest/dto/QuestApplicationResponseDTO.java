@@ -21,6 +21,8 @@ public class QuestApplicationResponseDTO {
 
     private Long applicantId;
     private String applicantUsername;
+    private String applicantProfileDescription;
+    private String applicantProfileAvatarDataUrl;
 
     private String message;
     private BigDecimal proposedPrice;

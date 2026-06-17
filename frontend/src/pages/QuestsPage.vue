@@ -12,6 +12,8 @@ import DashboardEditSheet from "../components/dashboard/DashboardEditSheet.vue"
 import DashboardQuestDialog from "../components/dashboard/DashboardQuestDialog.vue"
 import DashboardApplicationDialog from "../components/dashboard/DashboardApplicationDialog.vue"
 import UiDialog from "../components/ui/UiDialog.vue"
+import ProfileAvatar from "../components/profile/ProfileAvatar.vue"
+import ProfileBio from "../components/profile/ProfileBio.vue"
 import {logoutUser} from "../auth.ts"
 import {useQuestDashboard} from "../composables/useQuestDashboard.ts"
 
@@ -100,23 +102,65 @@ onMounted(dashboard.init)
         <UiDialog
           :open="dashboard.isProfileEditDialogOpen"
           title="Edit profile"
-          subtitle="Update your username."
+          subtitle="Update your username, avatar, and profile description."
           @close="dashboard.closeProfileEditDialog"
         >
           <form @submit.prevent="dashboard.saveProfile">
             <DashboardEditSheet
               :minimal="true"
             >
-              <div class="dashboard-edit-form dashboard-edit-form--profile">
-                <div class="field dashboard-edit-field dashboard-edit-field--profile-email">
-                  <span class="label">Email</span>
-                  <strong>{{ dashboard.currentUser?.email }}</strong>
-                </div>
+              <div class="profile-editor">
+                <ProfileAvatar
+                  :username="dashboard.currentUser?.username"
+                  :avatar-data-url="dashboard.profileAvatarDataUrl"
+                  :size="96"
+                />
 
-                <label class="field dashboard-edit-field dashboard-edit-field--profile-username">
-                  <span class="label">Username</span>
-                  <input v-model="dashboard.profileUsername" class="input" />
-                </label>
+                <div class="profile-editor__content">
+                  <div class="field dashboard-edit-field dashboard-edit-field--profile-email">
+                    <span class="label">Email</span>
+                    <strong>{{ dashboard.currentUser?.email }}</strong>
+                  </div>
+
+                  <label class="field dashboard-edit-field dashboard-edit-field--profile-username">
+                    <span class="label">Username</span>
+                    <input v-model="dashboard.profileUsername" class="input" />
+                  </label>
+
+                  <label class="field dashboard-edit-field">
+                    <span class="label">Profile image</span>
+                    <input
+                      class="input"
+                      type="file"
+                      accept="image/*"
+                      @change="dashboard.updateProfileAvatarFromFile(($event.target as HTMLInputElement).files?.[0] ?? null)"
+                    />
+                    <div class="button-row mt-2">
+                      <button class="button button--secondary" type="button" @click="dashboard.clearProfileAvatar">Remove image</button>
+                    </div>
+                    <p class="muted mt-2 mb-0">
+                      Images are automatically resized before saving.
+                    </p>
+                  </label>
+
+                  <label class="field dashboard-edit-field dashboard-edit-field--profile-description">
+                    <span class="label">Profile description</span>
+                    <textarea
+                      v-model="dashboard.profileDescription"
+                      class="textarea"
+                      rows="6"
+                      placeholder="Tell people what you do, how you work, and what they can expect."
+                    />
+                    <p class="muted mt-2 mb-0">
+                      Supports simple markdown like **bold**, _italic_, links, and bullet lists.
+                    </p>
+                  </label>
+
+                  <div class="profile-editor__preview">
+                    <span class="label">Preview</span>
+                    <ProfileBio :text="dashboard.profileDescription" />
+                  </div>
+                </div>
               </div>
 
               <template #actions>

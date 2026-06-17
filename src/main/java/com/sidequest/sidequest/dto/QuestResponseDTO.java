@@ -16,6 +16,8 @@ public class QuestResponseDTO {
 
     private Long creatorId;
     private String creatorUsername;
+    private String creatorProfileDescription;
+    private String creatorProfileAvatarDataUrl;
 
     private String title;
     private String description;

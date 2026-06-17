@@ -19,6 +19,8 @@ public class QuestMgr {
                 .id(quest.getId())
                 .creatorId(quest.getCreator().getId())
                 .creatorUsername(quest.getCreator().getUsername())
+                .creatorProfileDescription(quest.getCreator().getProfileDescription())
+                .creatorProfileAvatarDataUrl(quest.getCreator().getProfileAvatarDataUrl())
                 .title(quest.getTitle())
                 .description(quest.getDescription())
                 .awardAmount(quest.getAwardAmount())

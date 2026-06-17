@@ -2,6 +2,8 @@
 import {ref, onMounted} from "vue"
 import {useQuestDetailPage} from "../composables/useQuestDetailPage.ts"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
+import ProfileAvatar from "../components/profile/ProfileAvatar.vue"
+import ProfileBio from "../components/profile/ProfileBio.vue"
 import {formatQuestTerm} from "../shared/questSchedule.ts"
 import {formatQuestStatus} from "../lib/questDashboardRules.ts"
 import {useTimedBanner} from "../composables/useTimedBanner.ts"
@@ -154,7 +156,17 @@ onMounted(init)
           </div>
           <div class="field">
             <span class="label">Creator</span>
-            <strong>{{ quest.creatorUsername }}</strong>
+            <div class="profile-card__identity">
+              <RouterLink class="profile-link" :to="`/users/${quest.creatorId}`">
+                <ProfileAvatar
+                  :username="quest.creatorUsername"
+                  :avatar-data-url="quest.creatorProfileAvatarDataUrl"
+                  :size="48"
+                />
+                <strong>{{ quest.creatorUsername }}</strong>
+              </RouterLink>
+              <ProfileBio :text="quest.creatorProfileDescription" />
+            </div>
           </div>
         </div>
 

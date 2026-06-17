@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted, ref} from "vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import ProfileAvatar from "../profile/ProfileAvatar.vue"
 
 defineProps<{
   dashboard: QuestDashboard
@@ -51,9 +52,11 @@ onBeforeUnmount(() => {
           type="button"
           @click="toggleAccountMenu"
         >
-          <span class="dashboard-topbar__user-avatar" aria-hidden="true">
-            {{ dashboard.currentUser?.username?.charAt(0).toUpperCase() ?? "U" }}
-          </span>
+          <ProfileAvatar
+            :username="dashboard.currentUser?.username"
+            :avatar-data-url="dashboard.currentUser?.profileAvatarDataUrl"
+            :size="42"
+          />
           <span class="dashboard-topbar__user-copy">
             <strong>{{ dashboard.currentUser?.username || "Account" }}</strong>
             <small>Signed in</small>

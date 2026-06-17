@@ -5,6 +5,7 @@ import QuestsPage from "./pages/QuestsPage.vue";
 import QuestDetailView from "./views/QuestDetailView.vue";
 import LoginView from "./views/LoginView.vue";
 import RegisterView from "./views/RegisterView.vue";
+import UserProfileView from "./views/UserProfileView.vue";
 import {isAdmin, isLoggedIn} from "./auth.ts";
 
 
@@ -29,6 +30,11 @@ const routes = [
     {
         path: '/quests/:id',
         component: QuestDetailView,
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/users/:id',
+        component: UserProfileView,
         meta: {requiresAuth: true}
     },
     {

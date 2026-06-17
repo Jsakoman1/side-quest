@@ -33,4 +33,6 @@ public interface QuestApplicationRepository extends JpaRepository<QuestApplicati
     boolean existsByQuestId(Long questId);
 
     void deleteByQuestId(Long questId);
+
+    long countByApplicantId(Long applicantId);
 }

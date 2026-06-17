@@ -21,7 +21,7 @@ const filteredUsers = computed(() => {
   }
 
   return usersPage.appUsers.filter((user) => {
-    return [user.username, user.email, user.role].some((value) => value.toLowerCase().includes(query))
+    return [user.username, user.email, user.role, user.profileDescription ?? ""].some((value) => value.toLowerCase().includes(query))
   })
 })
 

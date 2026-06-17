@@ -4,6 +4,8 @@ import {useRouter} from "vue-router"
 import UiDialog from "../ui/UiDialog.vue"
 import DashboardEditSheet from "./DashboardEditSheet.vue"
 import UiStatusBanner from "../ui/UiStatusBanner.vue"
+import ProfileAvatar from "../profile/ProfileAvatar.vue"
+import ProfileBio from "../profile/ProfileBio.vue"
 import {useTimedBanner} from "../../composables/useTimedBanner.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 
@@ -72,6 +74,19 @@ const withdrawApplication = () => {
       <div class="dialog-sheet__hero">
         <div class="dialog-sheet__meta">
           <span class="badge">Creator: {{ props.dashboard.questCreatorUsernameForQuest(application.questId) }}</span>
+        </div>
+        <div class="dialog-profile-card">
+          <div class="profile-card__identity">
+            <RouterLink class="profile-link" :to="`/users/${props.dashboard.questForId(application.questId)?.creatorId}`">
+              <ProfileAvatar
+                :username="props.dashboard.questCreatorUsernameForQuest(application.questId)"
+                :avatar-data-url="props.dashboard.questForId(application.questId)?.creatorProfileAvatarDataUrl"
+                :size="72"
+              />
+              <strong>{{ props.dashboard.questCreatorUsernameForQuest(application.questId) }}</strong>
+            </RouterLink>
+            <ProfileBio :text="props.dashboard.questForId(application.questId)?.creatorProfileDescription" />
+          </div>
         </div>
       </div>
 
