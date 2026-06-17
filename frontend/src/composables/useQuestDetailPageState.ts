@@ -1,14 +1,15 @@
 import {computed, ref} from "vue"
 import {useRoute, useRouter} from "vue-router"
-import {currentUser} from "../auth.ts"
+import {currentUser, isAdmin} from "../auth.ts"
 import {buildRequestDebugInfo, formatDebugInfo} from "../httpDebug.ts"
-import {API_BASE_URL, type Quest} from "../api/sidequestApi.ts"
+import {API_BASE_URL, type Quest, type QuestApplication} from "../api/sidequestApi.ts"
 
 export const useQuestDetailPageState = () => {
   const route = useRoute()
   const router = useRouter()
 
   const quest = ref<Quest | null>(null)
+  const myApplications = ref<QuestApplication[]>([])
   const isLoading = ref(false)
   const error = ref("")
   const errorDetails = ref<string[]>([])
@@ -22,6 +23,22 @@ export const useQuestDetailPageState = () => {
     }
 
     return quest.value.creatorId === currentUser.value.id
+  })
+
+  const isApprovedApplicant = computed(() => {
+    if (!quest.value || !currentUser.value) {
+      return false
+    }
+
+    return myApplications.value.some((application) => application.questId === quest.value?.id && application.status === "APPROVED")
+  })
+
+  const canRespondToTermChange = computed(() => {
+    if (!quest.value) {
+      return false
+    }
+
+    return quest.value.status === "WAITING_CONFIRMATION" && (isAdmin() || isApprovedApplicant.value)
   })
 
   const copyDebugInfo = async () => {
@@ -44,12 +61,15 @@ export const useQuestDetailPageState = () => {
     router,
     questId,
     quest,
+    myApplications,
     isLoading,
     error,
     errorDetails,
     copiedDebug,
     isSaving,
     isOwner,
+    isApprovedApplicant,
+    canRespondToTermChange,
     copyDebugInfo,
     setNotFoundErrorDetails
   }

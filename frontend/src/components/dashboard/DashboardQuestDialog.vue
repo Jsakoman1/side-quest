@@ -3,6 +3,7 @@ import {computed, ref, watch} from "vue"
 import UiDialog from "../ui/UiDialog.vue"
 import DashboardEditSheet from "./DashboardEditSheet.vue"
 import UiStatusBanner from "../ui/UiStatusBanner.vue"
+import {useTimedBanner} from "../../composables/useTimedBanner.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 
 const props = defineProps<{
@@ -19,20 +20,17 @@ const applications = computed(() => {
 })
 
 const isEditing = ref(false)
-const actionMessage = ref("")
-const actionMessageTone = ref<"success" | "warning">("success")
 const isDeleting = ref(false)
-let actionMessageTimeout: number | undefined
+const isTermDecisioning = ref(false)
+const actionBanner = useTimedBanner()
+const actionMessage = actionBanner.message
+const actionMessageTone = actionBanner.tone
 
 watch(quest, () => {
   isEditing.value = false
-  actionMessage.value = ""
-  actionMessageTone.value = "success"
+  actionBanner.clear()
   isDeleting.value = false
-
-  if (actionMessageTimeout !== undefined) {
-    window.clearTimeout(actionMessageTimeout)
-  }
+  isTermDecisioning.value = false
 })
 
 const canEdit = computed(() => {
@@ -66,20 +64,38 @@ const approvedApplication = computed(() => {
   return applications.value.find((application) => application.status === "APPROVED") ?? null
 })
 
+const isApprovedApplicant = computed(() => {
+  if (!quest.value) {
+    return false
+  }
+
+  return props.dashboard.myApplications.some((application) => application.questId === quest.value?.id && application.status === "APPROVED")
+})
+
 const canShowApplications = computed(() => {
   return !!quest.value && (props.dashboard.isMyQuest(quest.value) || props.dashboard.isAdmin())
 })
 
-const setActionMessage = (message: string, tone: "success" | "warning" = "success") => {
-  if (actionMessageTimeout !== undefined) {
-    window.clearTimeout(actionMessageTimeout)
+const canRespondToTermChange = computed(() => {
+  if (!quest.value) {
+    return false
   }
 
-  actionMessage.value = message
-  actionMessageTone.value = tone
-  actionMessageTimeout = window.setTimeout(() => {
-    actionMessage.value = ""
-  }, 1800)
+  return quest.value.status === "WAITING_CONFIRMATION"
+    && (props.dashboard.isAdmin() || isApprovedApplicant.value)
+})
+
+const beginEditQuest = () => {
+  if (!quest.value) {
+    return
+  }
+
+  props.dashboard.startEditingQuest(quest.value)
+  isEditing.value = true
+}
+
+const setActionMessage = (message: string, tone: "success" | "warning" = "success") => {
+  actionBanner.show(message, tone)
 }
 
 const closeQuest = () => {
@@ -152,6 +168,54 @@ const declineApplication = (applicationId: number) => {
     }, 900)
   })()
 }
+
+const confirmTermChange = () => {
+  if (!quest.value) {
+    return
+  }
+
+  isTermDecisioning.value = true
+  setActionMessage("Confirming quest term...", "warning")
+
+  const questId = quest.value.id
+  void (async () => {
+    const confirmed = await props.dashboard.confirmQuestTermChange(questId)
+    if (!confirmed) {
+      isTermDecisioning.value = false
+      return
+    }
+
+    setActionMessage("Quest term confirmed.")
+    window.setTimeout(() => {
+      props.dashboard.closeQuestDialog()
+      isTermDecisioning.value = false
+    }, 900)
+  })()
+}
+
+const rejectTermChange = () => {
+  if (!quest.value) {
+    return
+  }
+
+  isTermDecisioning.value = true
+  setActionMessage("Rejecting quest term...", "warning")
+
+  const questId = quest.value.id
+  void (async () => {
+    const rejected = await props.dashboard.rejectQuestTermChange(questId)
+    if (!rejected) {
+      isTermDecisioning.value = false
+      return
+    }
+
+    setActionMessage("Quest term change rejected.", "warning")
+    window.setTimeout(() => {
+      props.dashboard.closeQuestDialog()
+      isTermDecisioning.value = false
+    }, 900)
+  })()
+}
 </script>
 
 <template>
@@ -163,7 +227,7 @@ const declineApplication = (applicationId: number) => {
     @close="props.dashboard.closeQuestDialog()"
   >
     <template v-if="canEdit && !isEditing" #actions>
-      <button class="button button--secondary" type="button" @click="isEditing = true">Edit</button>
+      <button class="button button--secondary" type="button" @click="beginEditQuest">Edit</button>
     </template>
 
     <div v-if="quest" class="stack dialog-sheet">
@@ -176,6 +240,23 @@ const declineApplication = (applicationId: number) => {
       <UiStatusBanner :message="actionMessage" :tone="actionMessageTone" />
 
       <p class="dialog-sheet__description">{{ quest.description }}</p>
+
+      <div class="grid grid--two">
+        <div class="field">
+          <span class="label">Scheduled time</span>
+          <strong>{{ props.dashboard.formatQuestTermLabel(quest) }}</strong>
+        </div>
+        <div class="field">
+          <span class="label">Time type</span>
+          <strong>{{ quest.termFixed ? "Fixed" : "Negotiable" }}</strong>
+        </div>
+      </div>
+
+      <div v-if="quest.status === 'WAITING_CONFIRMATION'" class="alert alert--warning">
+        <strong>Term change waiting for confirmation</strong>
+        <div class="muted mt-2">Current: {{ props.dashboard.formatQuestTermLabel(quest) }}</div>
+        <div class="muted">Pending: {{ props.dashboard.formatQuestTermFromParts(quest.pendingScheduledAt, quest.pendingTermFixed ?? quest.termFixed) }}</div>
+      </div>
 
       <form v-if="canEdit && isEditing" class="stack" @submit.prevent="props.dashboard.saveEditedQuest">
         <DashboardEditSheet :minimal="true">
@@ -198,6 +279,22 @@ const declineApplication = (applicationId: number) => {
               <textarea v-model="props.dashboard.editQuestDescription" class="textarea" />
             </label>
 
+            <label class="field dashboard-edit-field">
+              <span class="label">Scheduled time</span>
+              <input v-model="props.dashboard.editQuestScheduledAt" class="input" type="datetime-local" />
+            </label>
+
+            <label class="field dashboard-edit-field dashboard-edit-field--toggle">
+              <span class="label">Time type</span>
+              <div class="checkbox-field">
+                <input v-model="props.dashboard.editQuestTermFixed" type="checkbox" />
+                <span>Fixed term</span>
+              </div>
+              <p class="muted mt-2 mb-0">
+                Use a fixed time for a locked schedule. Leave it negotiable if the final time should be agreed later.
+              </p>
+            </label>
+
             <template v-if="props.dashboard.isAdmin()">
               <label class="field dashboard-edit-field">
                 <span class="label">Creator</span>
@@ -215,13 +312,16 @@ const declineApplication = (applicationId: number) => {
                     {{ option.label }}
                   </option>
                 </select>
+                <p class="muted mt-2 mb-0">
+                  Setting a quest back to Open reopens all non-withdrawn applications.
+                </p>
               </label>
             </template>
           </div>
 
           <template #actions>
             <button class="button button--action" type="submit">Save changes</button>
-            <button class="button button--ghost" type="button" @click="isEditing = false">Discard changes</button>
+            <button class="button button--ghost" type="button" @click="props.dashboard.cancelEditingQuest(); isEditing = false">Discard changes</button>
           </template>
         </DashboardEditSheet>
       </form>
@@ -297,6 +397,17 @@ const declineApplication = (applicationId: number) => {
 
       <div v-if="canEdit && !isEditing" class="dialog-sheet__footer">
         <button class="button button--danger" type="button" :disabled="isDeleting" @click="closeQuest">Delete quest</button>
+      </div>
+
+      <div v-if="canRespondToTermChange" class="dialog-sheet__footer">
+        <div class="button-row">
+          <button class="button button--secondary" type="button" :disabled="isTermDecisioning" @click="confirmTermChange">
+            Confirm term change
+          </button>
+          <button class="button button--danger" type="button" :disabled="isTermDecisioning" @click="rejectTermChange">
+            Reject term change
+          </button>
+        </div>
       </div>
 
     </div>

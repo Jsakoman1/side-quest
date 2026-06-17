@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DashboardNews from "./DashboardNews.vue"
 import DashboardQuestSummaryRow from "./DashboardQuestSummaryRow.vue"
 import DashboardSectionHeader from "./DashboardSectionHeader.vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
@@ -11,6 +12,8 @@ defineProps<{
 <template>
   <section class="overview-grid">
     <div class="overview-panels">
+      <DashboardNews :dashboard="dashboard" />
+
       <article class="card overview-panel overview-panel--my-work overview-panel--compact">
         <DashboardSectionHeader
           title="Your Quests"

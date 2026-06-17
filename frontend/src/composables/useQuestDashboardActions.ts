@@ -6,7 +6,7 @@ import {isAdmin, currentUser} from "../auth.ts"
 export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const refreshDashboardData = async () => {
     state.resetErrorState()
-    await Promise.all([fetchQuests(), fetchMyApplications(), fetchAppUsers()])
+    await Promise.all([fetchQuests(), fetchMyApplications(), fetchNews(), fetchNewsUnreadCount(), fetchAppUsers()])
   }
 
   const fetchQuests = async () => {
@@ -39,6 +39,48 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     }
   }
 
+  const fetchNews = async () => {
+    state.isLoadingNews.value = true
+    state.newsError.value = ""
+    state.newsErrorDetails.value = []
+
+    try {
+      state.newsItems.value = await sidequestApi.getMyNews()
+    } catch (error) {
+      state.newsError.value = "Could not load updates."
+      state.newsErrorDetails.value = buildRequestDebugInfo(`${API_BASE_URL}/news/me`, "GET", error)
+    } finally {
+      state.isLoadingNews.value = false
+    }
+  }
+
+  const fetchNewsUnreadCount = async () => {
+    try {
+      state.unreadNewsCount.value = await sidequestApi.getMyNewsUnreadCount()
+    } catch {
+      state.unreadNewsCount.value = 0
+    }
+  }
+
+  const markNewsAsRead = async () => {
+    try {
+      await sidequestApi.markMyNewsAsRead()
+      await Promise.all([fetchNews(), fetchNewsUnreadCount()])
+      state.showFeedback("Updates marked as read.", "success")
+    } catch {
+      state.showFeedback("Could not mark updates as read.", "error")
+    }
+  }
+
+  const markNewsItemAsRead = async (newsId: number) => {
+    try {
+      await sidequestApi.markMyNewsItemAsRead(newsId)
+      await Promise.all([fetchNews(), fetchNewsUnreadCount()])
+    } catch {
+      state.showFeedback("Could not mark update as read.", "error")
+    }
+  }
+
   const fetchAppUsers = async () => {
     if (!isAdmin()) {
       return
@@ -64,17 +106,27 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       return
     }
 
+    const scheduledAt = state.questScheduledAt.value ? state.parseInstantFromInput(state.questScheduledAt.value) : null
+    if (state.questTermFixed.value && !scheduledAt) {
+      state.showFeedback("A fixed term needs a date and time.", "error")
+      return
+    }
+
     try {
       await sidequestApi.createQuest({
         title: state.questTitle.value.trim(),
         description: state.questDescription.value.trim(),
         awardAmount: state.questAwardAmount.value ? Number(state.questAwardAmount.value) : null,
+        scheduledAt,
+        termFixed: state.questTermFixed.value,
         creatorId: isAdmin() && state.questCreatorId.value ? Number(state.questCreatorId.value) : undefined
       })
 
       state.questTitle.value = ""
       state.questDescription.value = ""
       state.questAwardAmount.value = ""
+      state.questScheduledAt.value = ""
+      state.questTermFixed.value = false
       if (isAdmin() && currentUser.value) {
         state.questCreatorId.value = String(currentUser.value.id)
       }
@@ -245,12 +297,20 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     }
 
     const questId = state.editingQuestId.value
+    const scheduledAt = state.editQuestScheduledAt.value ? state.parseInstantFromInput(state.editQuestScheduledAt.value) : null
+
+    if (state.editQuestTermFixed.value && !scheduledAt) {
+      state.showFeedback("A fixed term needs a date and time.", "error")
+      return
+    }
 
     try {
       await sidequestApi.updateQuest(questId, {
         title: state.editQuestTitle.value.trim(),
         description: state.editQuestDescription.value.trim(),
         awardAmount: state.editQuestAwardAmount.value ? Number(state.editQuestAwardAmount.value) : null,
+        scheduledAt,
+        termFixed: state.editQuestTermFixed.value,
         creatorId: isAdmin() && state.editQuestCreatorId.value ? Number(state.editQuestCreatorId.value) : undefined,
         status: isAdmin() ? state.editQuestStatus.value : undefined
       })
@@ -262,6 +322,32 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await fetchQuests()
     } catch {
       state.showFeedback("Could not update quest.", "error")
+    }
+  }
+
+  const confirmQuestTermChange = async (questId: number) => {
+    try {
+      await sidequestApi.confirmQuestTermChange(questId)
+      state.triggerSuccessPulse(`quest-${questId}`)
+      state.showFeedback("Quest term confirmed.", "success")
+      await Promise.all([fetchQuests(), loadApplicationsForQuest(questId)])
+      return true
+    } catch {
+      state.showFeedback("Could not confirm quest term.", "error")
+      return false
+    }
+  }
+
+  const rejectQuestTermChange = async (questId: number) => {
+    try {
+      await sidequestApi.rejectQuestTermChange(questId)
+      state.triggerSuccessPulse(`quest-${questId}`)
+      state.showFeedback("Quest term change rejected.", "success")
+      await Promise.all([fetchQuests(), loadApplicationsForQuest(questId)])
+      return true
+    } catch {
+      state.showFeedback("Could not reject quest term.", "error")
+      return false
     }
   }
 
@@ -304,6 +390,10 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     refreshDashboardData,
     fetchQuests,
     fetchMyApplications,
+    fetchNews,
+    fetchNewsUnreadCount,
+    markNewsAsRead,
+    markNewsItemAsRead,
     fetchAppUsers,
     createQuest,
     loadApplicationsForQuest,
@@ -314,6 +404,8 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     declineApplication,
     withdrawApplication,
     updateQuestStatus,
+    confirmQuestTermChange,
+    rejectQuestTermChange,
     deleteQuest,
     saveEditedApplication,
     saveEditedQuest,

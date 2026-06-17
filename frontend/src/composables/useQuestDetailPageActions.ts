@@ -18,6 +18,14 @@ export const useQuestDetailPageActions = (state: QuestDetailPageState) => {
     }
   }
 
+  const fetchMyApplications = async () => {
+    try {
+      state.myApplications.value = await sidequestApi.getMyApplications()
+    } catch {
+      state.myApplications.value = []
+    }
+  }
+
   const updateStatus = async (action: "start" | "complete") => {
     state.isSaving.value = true
     state.error.value = ""
@@ -28,6 +36,38 @@ export const useQuestDetailPageActions = (state: QuestDetailPageState) => {
         : await sidequestApi.completeQuest(state.questId.value)
     } catch {
       state.error.value = "Could not update quest."
+    } finally {
+      state.isSaving.value = false
+    }
+  }
+
+  const confirmQuestTermChange = async () => {
+    state.isSaving.value = true
+    state.error.value = ""
+
+    try {
+      state.quest.value = await sidequestApi.confirmQuestTermChange(state.questId.value)
+      await fetchMyApplications()
+      return true
+    } catch {
+      state.error.value = "Could not confirm quest term."
+      return false
+    } finally {
+      state.isSaving.value = false
+    }
+  }
+
+  const rejectQuestTermChange = async () => {
+    state.isSaving.value = true
+    state.error.value = ""
+
+    try {
+      state.quest.value = await sidequestApi.rejectQuestTermChange(state.questId.value)
+      await fetchMyApplications()
+      return true
+    } catch {
+      state.error.value = "Could not reject quest term."
+      return false
     } finally {
       state.isSaving.value = false
     }
@@ -49,12 +89,15 @@ export const useQuestDetailPageActions = (state: QuestDetailPageState) => {
   }
 
   const init = async () => {
-    await fetchQuest()
+    await Promise.all([fetchQuest(), fetchMyApplications()])
   }
 
   return {
     fetchQuest,
+    fetchMyApplications,
     updateStatus,
+    confirmQuestTermChange,
+    rejectQuestTermChange,
     deleteQuest,
     init
   }

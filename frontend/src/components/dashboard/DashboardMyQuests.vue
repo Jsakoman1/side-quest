@@ -21,6 +21,10 @@ defineProps<{
             <strong>{{ dashboard.countMyQuestsByStatus("OPEN") }}</strong>
           </div>
           <div class="overview-stat-chip">
+            <span class="label">Waiting</span>
+            <strong>{{ dashboard.countMyQuestsByStatus("WAITING_CONFIRMATION") }}</strong>
+          </div>
+          <div class="overview-stat-chip">
             <span class="label">Active</span>
             <strong>{{ dashboard.countMyQuestsByStatus("ASSIGNED") + dashboard.countMyQuestsByStatus("IN_PROGRESS") }}</strong>
           </div>
@@ -61,6 +65,8 @@ defineProps<{
             :primary-value="quest.awardAmount"
             primary-icon="$"
             money-tone="expense"
+            secondary-label="Term"
+            :secondary-value="dashboard.formatQuestTermLabel(quest)"
             :title="quest.title"
             :description="quest.description"
           >

@@ -19,7 +19,7 @@ const login = async () => {
     loginUser(response)
     email.value = ''
     password.value = ''
-    await router.push('/quests')
+    await router.push(response.role === 'ADMIN' ? '/admin/quests' : '/quests')
   } catch (e) {
     error.value = 'Invalid email or password'
   }

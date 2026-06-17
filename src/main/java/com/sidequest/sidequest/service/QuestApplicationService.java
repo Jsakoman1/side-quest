@@ -23,23 +23,30 @@ public class QuestApplicationService {
     private final QuestApplicationRepository questApplicationRepository;
     private final QuestRepository questRepository;
     private final QuestApplicationMgr questApplicationMgr;
+    private final QuestNewsService questNewsService;
 
     public QuestApplicationService(
             QuestApplicationRepository questApplicationRepository,
             QuestRepository questRepository,
-            QuestApplicationMgr questApplicationMgr
+            QuestApplicationMgr questApplicationMgr,
+            QuestNewsService questNewsService
     ) {
         this.questApplicationRepository = questApplicationRepository;
         this.questRepository = questRepository;
         this.questApplicationMgr = questApplicationMgr;
+        this.questNewsService = questNewsService;
     }
 
+    @Transactional
     public QuestApplicationResponseDTO applyForQuest(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
         Quest quest = requireOpenQuest(questId);
         validateNotQuestCreator(quest, currentUser);
         validateNoDuplicateApplication(questId, currentUser.getId());
 
-        return saveAndMapApplication(questApplicationMgr.toEntity(dto, quest, currentUser));
+        QuestApplication application = questApplicationMgr.toEntity(dto, quest, currentUser);
+        QuestApplicationResponseDTO response = saveAndMapApplication(application);
+        questNewsService.notifyApplicationCreated(quest, application, currentUser);
+        return response;
     }
 
     public List<QuestApplicationResponseDTO> getApplicationsForQuest(Long questId, AppUser currentUser) {
@@ -63,14 +70,18 @@ public class QuestApplicationService {
         QuestApplication application = requirePendingMyApplication(questId, currentUser);
         application.setMessage(dto.getMessage());
         application.setProposedPrice(dto.getProposedPrice());
-        return saveAndMapApplication(application);
+        QuestApplicationResponseDTO response = saveAndMapApplication(application);
+        questNewsService.notifyApplicationUpdated(application.getQuest(), application, currentUser);
+        return response;
     }
 
     @Transactional
     public QuestApplicationResponseDTO withdrawMyApplication(Long questId, AppUser currentUser) {
         QuestApplication application = requirePendingMyApplication(questId, currentUser);
         application.setStatus(QuestApplicationStatus.WITHDRAWN);
-        return saveAndMapApplication(application);
+        QuestApplicationResponseDTO response = saveAndMapApplication(application);
+        questNewsService.notifyApplicationWithdrawn(application.getQuest(), application, currentUser);
+        return response;
     }
 
     @Transactional
@@ -82,9 +93,14 @@ public class QuestApplicationService {
         application.setStatus(QuestApplicationStatus.APPROVED);
         quest.setStatus(QuestStatus.ASSIGNED);
 
-        declineOtherPendingApplications(questId, applicationId);
+        List<QuestApplication> declinedApplications = declineOtherPendingApplications(questId, applicationId);
         questRepository.save(quest);
-        return saveAndMapApplication(application);
+        QuestApplicationResponseDTO response = saveAndMapApplication(application);
+        for (QuestApplication declinedApplication : declinedApplications) {
+            questNewsService.notifyApplicationDeclined(quest, declinedApplication, currentUser);
+        }
+        questNewsService.notifyApplicationApproved(quest, application, currentUser);
+        return response;
     }
 
     @Transactional
@@ -94,7 +110,9 @@ public class QuestApplicationService {
 
         QuestApplication application = requirePendingApplication(questId, applicationId);
         application.setStatus(QuestApplicationStatus.DECLINED);
-        return saveAndMapApplication(application);
+        QuestApplicationResponseDTO response = saveAndMapApplication(application);
+        questNewsService.notifyApplicationDeclined(quest, application, currentUser);
+        return response;
     }
 
     private Quest requireQuest(Long questId) {
@@ -134,8 +152,12 @@ public class QuestApplicationService {
         return questApplicationMgr.toDto(questApplicationRepository.save(application));
     }
 
-    private void declineOtherPendingApplications(Long questId, Long approvedApplicationId) {
+    private List<QuestApplication> declineOtherPendingApplications(Long questId, Long approvedApplicationId) {
         List<QuestApplication> pendingApplications = questApplicationRepository.findByQuestIdAndStatus(questId, QuestApplicationStatus.PENDING);
+        if (pendingApplications == null || pendingApplications.isEmpty()) {
+            return List.of();
+        }
+
         List<QuestApplication> declinedApplications = new java.util.ArrayList<>();
         for (QuestApplication application : pendingApplications) {
             if (!Objects.equals(application.getId(), approvedApplicationId)) {
@@ -147,6 +169,8 @@ public class QuestApplicationService {
         if (!declinedApplications.isEmpty()) {
             questApplicationRepository.saveAll(declinedApplications);
         }
+
+        return declinedApplications;
     }
 
     private void validateQuestIsOpen(Quest quest) {

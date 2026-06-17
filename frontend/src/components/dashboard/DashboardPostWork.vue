@@ -34,6 +34,22 @@ defineProps<{
               </div>
             </label>
 
+            <label class="field dashboard-edit-field">
+              <span class="label">Scheduled time</span>
+              <input v-model="dashboard.questScheduledAt" class="input" type="datetime-local" />
+            </label>
+
+            <label class="field dashboard-edit-field dashboard-edit-field--toggle">
+              <span class="label">Time type</span>
+              <div class="checkbox-field">
+                <input v-model="dashboard.questTermFixed" type="checkbox" />
+                <span>Fixed term</span>
+              </div>
+              <p class="muted mt-2 mb-0">
+                Use a fixed time for a locked schedule. Leave it negotiable if the final time should be agreed later.
+              </p>
+            </label>
+
             <label v-if="dashboard.isAdmin()" class="field">
               <span class="label">Creator</span>
               <select v-model="dashboard.questCreatorId" class="input">

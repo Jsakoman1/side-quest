@@ -2,7 +2,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue"
 import {useRoute, useRouter} from "vue-router"
 import {currentUser, isAdmin} from "../auth.ts"
 import {formatDebugInfo} from "../httpDebug.ts"
-import {type AppUser, type Quest, type QuestApplication} from "../api/sidequestApi.ts"
+import {type AppUser, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
 import {
   applicationStatusSortOrder,
   formatApplicationStatus,
@@ -11,6 +11,12 @@ import {
   statusBadgeClass,
   statusSurfaceClass
 } from "../lib/questDashboardRules.ts"
+import {
+  formatInstantForDisplay,
+  formatInstantForInput,
+  formatQuestTerm,
+  parseInstantFromInput
+} from "../shared/questSchedule.ts"
 import {
   dashboardTabs,
   questStatusOptions,
@@ -27,16 +33,21 @@ export const useQuestDashboardState = () => {
   const activeTab = ref<DashboardTab>("overview")
   const quests = ref<Quest[]>([])
   const myApplications = ref<QuestApplication[]>([])
+  const newsItems = ref<QuestNewsItem[]>([])
+  const unreadNewsCount = ref(0)
   const appUsers = ref<AppUser[]>([])
 
   const isLoadingQuests = ref(false)
   const isLoadingApplications = ref(false)
+  const isLoadingNews = ref(false)
   const isLoadingUsers = ref(false)
 
   const questsError = ref("")
   const questsErrorDetails = ref<string[]>([])
   const applicationsError = ref("")
   const applicationsErrorDetails = ref<string[]>([])
+  const newsError = ref("")
+  const newsErrorDetails = ref<string[]>([])
   const usersError = ref("")
   const usersErrorDetails = ref<string[]>([])
 
@@ -51,6 +62,8 @@ export const useQuestDashboardState = () => {
   const questTitle = ref("")
   const questDescription = ref("")
   const questAwardAmount = ref("")
+  const questScheduledAt = ref("")
+  const questTermFixed = ref(false)
   const questCreatorId = ref("")
 
   const profileUsername = ref("")
@@ -69,6 +82,8 @@ export const useQuestDashboardState = () => {
   const editQuestTitle = ref("")
   const editQuestDescription = ref("")
   const editQuestAwardAmount = ref("")
+  const editQuestScheduledAt = ref("")
+  const editQuestTermFixed = ref(false)
   const editQuestCreatorId = ref("")
   const editQuestStatus = ref<QuestStatus>("OPEN")
   const editingApplicationId = ref<number | null>(null)
@@ -149,6 +164,15 @@ export const useQuestDashboardState = () => {
 
   const recentMyQuests = computed(() => myQuests.value.slice(0, 3))
   const recentMyApplications = computed(() => sortedMyApplications.value.slice(0, 3))
+  const recentNewsItems = computed(() => newsItems.value.slice(0, 6))
+  const unreadNewsItems = computed(() => newsItems.value.filter((item) => item.readAt === null))
+  const questCount = computed(() => sortedQuests.value.length)
+  const waitingConfirmationQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "WAITING_CONFIRMATION").length)
+  const openQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "OPEN").length)
+  const assignedQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "ASSIGNED").length)
+  const activeQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "ASSIGNED" || quest.status === "IN_PROGRESS").length)
+  const totalUserCount = computed(() => appUsers.value.length)
+  const adminUserCount = computed(() => appUsers.value.filter((user) => user.role === "ADMIN").length)
 
   const countMyQuestsByStatus = (status: QuestStatus) => {
     return myQuests.value.filter((quest) => quest.status === status).length
@@ -235,12 +259,9 @@ export const useQuestDashboardState = () => {
 
   const hasAppliedToQuest = (questId: number) => appliedQuestIds.value.has(questId)
 
-  const formatDateTime = (value: string) => {
-    return new Intl.DateTimeFormat("en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short"
-    }).format(new Date(value))
-  }
+  const formatDateTime = (value: string) => formatInstantForDisplay(value)
+  const formatQuestTermLabel = (quest: Quest) => formatQuestTerm(quest.scheduledAt, quest.termFixed)
+  const formatQuestTermFromParts = (scheduledAt: string | null | undefined, termFixed: boolean) => formatQuestTerm(scheduledAt, termFixed)
 
   const showFeedback = (message: string, type: "error" | "success") => {
     if (feedbackTimeout.value !== null) {
@@ -460,14 +481,12 @@ export const useQuestDashboardState = () => {
   }
 
   const startEditingQuest = (quest: Quest) => {
-    if (quest.status !== "OPEN") {
-      return
-    }
-
     editingQuestId.value = quest.id
     editQuestTitle.value = quest.title
     editQuestDescription.value = quest.description
     editQuestAwardAmount.value = String(quest.awardAmount ?? "")
+    editQuestScheduledAt.value = formatInstantForInput(quest.scheduledAt)
+    editQuestTermFixed.value = quest.termFixed
     editQuestCreatorId.value = String(quest.creatorId)
     editQuestStatus.value = quest.status
     openApplicationsQuestIds.value[quest.id] = false
@@ -479,6 +498,8 @@ export const useQuestDashboardState = () => {
     questTitle.value = quest.title
     questDescription.value = quest.description
     questAwardAmount.value = String(quest.awardAmount ?? "")
+    questScheduledAt.value = formatInstantForInput(quest.scheduledAt)
+    questTermFixed.value = quest.termFixed
     questCreatorId.value = isAdmin() ? String(quest.creatorId) : ""
     editingQuestId.value = null
     closeQuestDisclosure(quest.id)
@@ -498,6 +519,8 @@ export const useQuestDashboardState = () => {
     questsErrorDetails.value = []
     applicationsError.value = ""
     applicationsErrorDetails.value = []
+    newsError.value = ""
+    newsErrorDetails.value = []
     usersError.value = ""
     usersErrorDetails.value = []
   }
@@ -522,14 +545,19 @@ export const useQuestDashboardState = () => {
     sectionSubtitle,
     quests,
     myApplications,
+    newsItems,
+    unreadNewsCount,
     appUsers,
     isLoadingQuests,
     isLoadingApplications,
+    isLoadingNews,
     isLoadingUsers,
     questsError,
     questsErrorDetails,
     applicationsError,
     applicationsErrorDetails,
+    newsError,
+    newsErrorDetails,
     usersError,
     usersErrorDetails,
     feedback,
@@ -542,6 +570,8 @@ export const useQuestDashboardState = () => {
     questTitle,
     questDescription,
     questAwardAmount,
+    questScheduledAt,
+    questTermFixed,
     questCreatorId,
     profileUsername,
     myQuestStatusFilter,
@@ -556,6 +586,8 @@ export const useQuestDashboardState = () => {
     editQuestTitle,
     editQuestDescription,
     editQuestAwardAmount,
+    editQuestScheduledAt,
+    editQuestTermFixed,
     editQuestCreatorId,
     editQuestStatus,
     editingApplicationId,
@@ -577,6 +609,15 @@ export const useQuestDashboardState = () => {
     filteredAdminQuests,
     recentMyQuests,
     recentMyApplications,
+    recentNewsItems,
+    unreadNewsItems,
+    questCount,
+    waitingConfirmationQuestCount,
+    openQuestCount,
+    assignedQuestCount,
+    activeQuestCount,
+    totalUserCount,
+    adminUserCount,
     countMyQuestsByStatus,
     countMyApplicationsByStatus,
     overviewCards,
@@ -599,6 +640,9 @@ export const useQuestDashboardState = () => {
     statusBadgeClass,
     statusSurfaceClass,
     formatDateTime,
+    formatQuestTermLabel,
+    formatQuestTermFromParts,
+    parseInstantFromInput,
     showFeedback,
     triggerSuccessPulse,
     setActiveTab,

@@ -879,6 +879,11 @@ button {
   color: var(--danger);
 }
 
+.badge--warning {
+  background: rgba(180, 35, 24, 0.08);
+  color: #b42318;
+}
+
 .badge--accent {
   background: var(--accent-soft);
   color: var(--accent);
@@ -896,6 +901,12 @@ button {
   border-radius: var(--radius-lg);
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.55);
+}
+
+.empty-state--error {
+  border-color: rgba(180, 35, 24, 0.18);
+  color: var(--danger);
+  background: rgba(180, 35, 24, 0.06);
 }
 
 .debug-inline {
@@ -951,6 +962,12 @@ button {
   border-color: rgba(22, 101, 52, 0.2);
   background: rgba(22, 101, 52, 0.06);
   color: var(--success);
+}
+
+.alert--warning {
+  border-color: rgba(180, 35, 24, 0.18);
+  background: rgba(180, 35, 24, 0.06);
+  color: #b42318;
 }
 
 .dashboard-toast {
@@ -1636,6 +1653,10 @@ button {
   position: relative;
 }
 
+.overview-panel--news {
+  gap: 2px;
+}
+
 .overview-stat-chip {
   display: inline-flex;
   align-items: baseline;
@@ -1724,6 +1745,94 @@ button {
   letter-spacing: 0.08em;
 }
 
+.admin-shell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 250, 250, 0.98)),
+    var(--surface);
+}
+
+.admin-shell-header__eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.admin-shell-header__copy {
+  min-width: 0;
+}
+
+.admin-shell-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-shell-header__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.admin-shell-header__tab {
+  min-width: 110px;
+}
+
+.button--active {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.button--active:hover {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.admin-hero-card,
+.admin-users-card {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-toolbar {
+  align-items: end;
+}
+
+.admin-users-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-users-actions {
+  justify-content: flex-end;
+}
+
+.admin-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.admin-workspace__panel {
+  min-width: 0;
+}
+
 .overview-scroll {
   flex: 1;
   min-height: 0;
@@ -1738,6 +1847,68 @@ button {
 
 .overview-panel--compact .overview-scroll {
   gap: 2px;
+}
+
+.news-feed {
+  display: grid;
+  gap: 8px;
+}
+
+.news-item {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.news-item--unread {
+  border-color: rgba(15, 98, 254, 0.22);
+  background: rgba(15, 98, 254, 0.04);
+}
+
+.news-item__top,
+.news-item__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.news-item__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.news-item__time {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.news-item__title {
+  font-size: 1rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.news-item__message {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.news-item__footer {
+  flex-wrap: wrap;
+}
+
+.news-item__meta {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .overview-panel .segment {
@@ -2276,6 +2447,26 @@ button {
   opacity: 1;
 }
 
+.checkbox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text);
+}
+
+.checkbox-field input {
+  margin: 0;
+}
+
+.dashboard-edit-field--toggle {
+  align-self: end;
+}
+
 @media (max-width: 780px) {
   .dashboard-edit-form--quest,
   .dashboard-edit-form--application,
@@ -2302,6 +2493,10 @@ button {
 .status-surface--assigned,
 .status-surface--done {
   background: #ffffff;
+}
+
+.status-surface--waiting {
+  background: rgba(180, 35, 24, 0.04);
 }
 
 .status-surface--progress {
@@ -2504,6 +2699,10 @@ button {
   }
 
   .grid--two {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-workspace {
     grid-template-columns: 1fr;
   }
 

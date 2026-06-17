@@ -1,20 +1,24 @@
 export const questStatusSortOrder = {
   OPEN: 0,
   ASSIGNED: 1,
-  IN_PROGRESS: 2,
-  COMPLETED: 3,
-  CANCELLED: 4
+  WAITING_CONFIRMATION: 2,
+  IN_PROGRESS: 3,
+  COMPLETED: 4,
+  CANCELLED: 5
 } as const
 
 export const applicationStatusSortOrder = {
   APPROVED: 0,
   PENDING: 1,
-  OPEN: 1,
   DECLINED: 2,
   WITHDRAWN: 3
 } as const
 
 export const formatQuestStatus = (status: string) => {
+  if (status === "WAITING_CONFIRMATION") {
+    return "Waiting confirmation"
+  }
+
   return status.replaceAll("_", " ")
 }
 
@@ -43,6 +47,10 @@ export const statusBadgeClass = (status: string) => {
     return "badge badge--success"
   }
 
+  if (status === "WAITING_CONFIRMATION") {
+    return "badge badge--warning"
+  }
+
   if (status === "DECLINED" || status === "WITHDRAWN") {
     return "badge badge--danger"
   }
@@ -59,6 +67,10 @@ export const statusSurfaceClass = (status: string) => {
     return "status-surface status-surface--assigned"
   }
 
+  if (status === "WAITING_CONFIRMATION") {
+    return "status-surface status-surface--waiting"
+  }
+
   if (status === "IN_PROGRESS") {
     return "status-surface status-surface--progress"
   }
@@ -72,4 +84,12 @@ export const statusSurfaceClass = (status: string) => {
   }
 
   return "status-surface status-surface--open"
+}
+
+export const isReopenedQuest = (reopenedAt: string | null | undefined, status: string) => {
+  return status === "OPEN" && !!reopenedAt
+}
+
+export const formatQuestReopenLabel = (reopenedAt: string | null | undefined, status: string) => {
+  return isReopenedQuest(reopenedAt, status) ? "Reopened" : "Open"
 }

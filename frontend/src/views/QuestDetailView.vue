@@ -2,6 +2,9 @@
 import {ref, onMounted} from "vue"
 import {useQuestDetailPage} from "../composables/useQuestDetailPage.ts"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
+import {formatQuestTerm} from "../shared/questSchedule.ts"
+import {formatQuestStatus} from "../lib/questDashboardRules.ts"
+import {useTimedBanner} from "../composables/useTimedBanner.ts"
 
 const {
   router,
@@ -13,27 +16,22 @@ const {
   copiedDebug,
   isSaving,
   isOwner,
+  canRespondToTermChange,
   updateStatus,
+  confirmQuestTermChange,
+  rejectQuestTermChange,
   deleteQuest,
   copyDebugInfo,
   init
 } = useQuestDetailPage()
 
-const actionMessage = ref("")
-const actionMessageTone = ref<"success" | "warning">("success")
-const isDeleting = ref(false)
-let actionMessageTimeout: number | undefined
+const isActionInProgress = ref(false)
+const actionBanner = useTimedBanner()
+const actionMessage = actionBanner.message
+const actionMessageTone = actionBanner.tone
 
 const setActionMessage = (message: string, tone: "success" | "warning" = "success") => {
-  if (actionMessageTimeout !== undefined) {
-    window.clearTimeout(actionMessageTimeout)
-  }
-
-  actionMessage.value = message
-  actionMessageTone.value = tone
-  actionMessageTimeout = window.setTimeout(() => {
-    actionMessage.value = ""
-  }, 1800)
+  actionBanner.show(message, tone)
 }
 
 const handleDeleteQuest = () => {
@@ -42,20 +40,56 @@ const handleDeleteQuest = () => {
     return
   }
 
-  isDeleting.value = true
+  isActionInProgress.value = true
   setActionMessage("Deleting quest...", "warning")
 
   void (async () => {
     const deleted = await deleteQuest()
     if (!deleted) {
-      isDeleting.value = false
+      isActionInProgress.value = false
       return
     }
 
     setActionMessage("Quest deleted.")
     window.setTimeout(() => {
       router.push("/quests")
-      isDeleting.value = false
+      isActionInProgress.value = false
+    }, 900)
+  })()
+}
+
+const handleConfirmTermChange = () => {
+  isActionInProgress.value = true
+  setActionMessage("Confirming quest term...", "warning")
+
+  void (async () => {
+    const confirmed = await confirmQuestTermChange()
+    if (!confirmed) {
+      isActionInProgress.value = false
+      return
+    }
+
+    setActionMessage("Quest term confirmed.")
+    window.setTimeout(() => {
+      isActionInProgress.value = false
+    }, 900)
+  })()
+}
+
+const handleRejectTermChange = () => {
+  isActionInProgress.value = true
+  setActionMessage("Rejecting quest term...", "warning")
+
+  void (async () => {
+    const rejected = await rejectQuestTermChange()
+    if (!rejected) {
+      isActionInProgress.value = false
+      return
+    }
+
+    setActionMessage("Quest term change rejected.", "warning")
+    window.setTimeout(() => {
+      isActionInProgress.value = false
     }, 900)
   })()
 }
@@ -106,7 +140,10 @@ onMounted(init)
           <h2 class="card__title">{{ quest.title }}</h2>
           <p class="page-subtitle mt-2">{{ quest.description }}</p>
         </div>
-        <span class="badge badge--accent">{{ quest.status.replaceAll('_', ' ') }}</span>
+        <div class="stack">
+          <span class="badge badge--accent">{{ formatQuestStatus(quest.status) }}</span>
+          <span v-if="quest.reopenedAt && quest.status === 'OPEN'" class="badge badge--warning">Reopened</span>
+        </div>
       </div>
 
       <div class="grid grid--two">
@@ -125,6 +162,29 @@ onMounted(init)
           <div class="field">
             <span class="label">Award</span>
             <strong>{{ quest.awardAmount }}</strong>
+          </div>
+          <div class="field">
+            <span class="label">Scheduled time</span>
+            <strong>{{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}</strong>
+          </div>
+          <div class="field">
+            <span class="label">Time type</span>
+            <strong>{{ quest.termFixed ? "Fixed time" : "By agreement" }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="quest.status === 'WAITING_CONFIRMATION'" class="alert alert--warning mt-4">
+        <div class="stack">
+          <strong>Term change waiting for confirmation</strong>
+          <div class="muted">
+            Current term: {{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}
+          </div>
+          <div class="muted">
+            Pending term: {{ formatQuestTerm(quest.pendingScheduledAt, quest.pendingTermFixed ?? quest.termFixed) }}
+          </div>
+          <div class="muted">
+            The approved applicant must confirm the new time before the quest can continue.
           </div>
         </div>
       </div>
@@ -154,10 +214,22 @@ onMounted(init)
             v-if="quest.status !== 'COMPLETED' && quest.status !== 'CANCELLED'"
             class="button button--danger"
             type="button"
-            :disabled="isSaving || isDeleting"
+            :disabled="isSaving || isActionInProgress"
             @click="handleDeleteQuest"
           >
             Delete
+          </button>
+        </div>
+      </div>
+
+      <div v-if="canRespondToTermChange" class="quest-footer">
+        <div class="divider"></div>
+        <div class="button-row">
+          <button class="button button--secondary" type="button" :disabled="isSaving || isActionInProgress" @click="handleConfirmTermChange">
+            Confirm term change
+          </button>
+          <button class="button button--danger" type="button" :disabled="isSaving || isActionInProgress" @click="handleRejectTermChange">
+            Reject term change
           </button>
         </div>
       </div>

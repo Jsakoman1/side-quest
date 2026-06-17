@@ -1,0 +1,47 @@
+export type QuestNewsType =
+  | "APPLICATION_CREATED"
+  | "APPLICATION_UPDATED"
+  | "APPLICATION_WITHDRAWN"
+  | "APPLICATION_APPROVED"
+  | "APPLICATION_DECLINED"
+  | "QUEST_TERM_CONFIRMATION_REQUESTED"
+  | "QUEST_TERM_CONFIRMED"
+  | "QUEST_TERM_REJECTED"
+  | "QUEST_STARTED"
+  | "QUEST_COMPLETED"
+  | "QUEST_REOPENED"
+  | "QUEST_DELETED"
+
+const questNewsTypeLabels: Record<QuestNewsType, string> = {
+  APPLICATION_CREATED: "New application",
+  APPLICATION_UPDATED: "Application updated",
+  APPLICATION_WITHDRAWN: "Application withdrawn",
+  APPLICATION_APPROVED: "Application approved",
+  APPLICATION_DECLINED: "Application declined",
+  QUEST_TERM_CONFIRMATION_REQUESTED: "Time confirmation needed",
+  QUEST_TERM_CONFIRMED: "Time confirmed",
+  QUEST_TERM_REJECTED: "Time rejected",
+  QUEST_STARTED: "Quest started",
+  QUEST_COMPLETED: "Quest completed",
+  QUEST_REOPENED: "Quest reopened",
+  QUEST_DELETED: "Quest deleted"
+}
+
+const questNewsTypeToneClasses: Record<QuestNewsType, string> = {
+  APPLICATION_CREATED: "badge--accent",
+  APPLICATION_UPDATED: "badge--accent",
+  APPLICATION_WITHDRAWN: "badge--danger",
+  APPLICATION_APPROVED: "badge--success",
+  APPLICATION_DECLINED: "badge--danger",
+  QUEST_TERM_CONFIRMATION_REQUESTED: "badge--warning",
+  QUEST_TERM_CONFIRMED: "badge--success",
+  QUEST_TERM_REJECTED: "badge--danger",
+  QUEST_STARTED: "badge--accent",
+  QUEST_COMPLETED: "badge--success",
+  QUEST_REOPENED: "badge--warning",
+  QUEST_DELETED: "badge--danger"
+}
+
+export const formatQuestNewsType = (type: QuestNewsType) => questNewsTypeLabels[type] ?? type
+
+export const questNewsBadgeClass = (type: QuestNewsType) => questNewsTypeToneClasses[type] ?? "badge--accent"

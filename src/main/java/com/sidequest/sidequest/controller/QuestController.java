@@ -60,6 +60,16 @@ public class QuestController {
         return toDto(questService.completeQuest(id, currentUser));
     }
 
+    @PatchMapping("/{id}/term/confirm")
+    public QuestResponseDTO confirmQuestTermChange(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
+        return toDto(questService.confirmQuestTermChange(id, currentUser));
+    }
+
+    @PatchMapping("/{id}/term/reject")
+    public QuestResponseDTO rejectQuestTermChange(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
+        return toDto(questService.rejectQuestTermChange(id, currentUser));
+    }
+
     private QuestResponseDTO toDto(Quest quest) {
         return questMgr.toDto(quest);
     }

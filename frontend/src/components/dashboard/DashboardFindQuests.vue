@@ -27,12 +27,11 @@ defineProps<{
           @click="dashboard.openQuestDialog(quest.id)"
         >
           <DashboardQuestSummaryRow
-            primary-label="Creator"
-            :primary-value="quest.creatorUsername"
-            secondary-label="Amount"
-            :secondary-value="quest.awardAmount"
-            secondary-icon="$"
+            primary-label="Amount"
+            :primary-value="quest.awardAmount"
             money-tone="income"
+            secondary-label="Term"
+            :secondary-value="dashboard.formatQuestTermLabel(quest)"
             :title="quest.title"
             :description="quest.description"
           >

@@ -38,6 +38,9 @@ class QuestApplicationServiceTest {
     @Mock
     private QuestApplicationMgr questApplicationMgr;
 
+    @Mock
+    private QuestNewsService questNewsService;
+
     @InjectMocks
     private QuestApplicationService questApplicationService;
 
@@ -67,6 +70,7 @@ class QuestApplicationServiceTest {
 
         assertEquals(100L, result.getId());
         verify(questApplicationMgr).toEntity(requestDTO, quest, applicant);
+        verify(questNewsService).notifyApplicationCreated(quest, application, applicant);
     }
 
     @Test
@@ -151,6 +155,8 @@ class QuestApplicationServiceTest {
         assertEquals(QuestStatus.ASSIGNED, quest.getStatus());
         assertEquals(QuestApplicationStatus.APPROVED, approvedApplication.getStatus());
         assertEquals(QuestApplicationStatus.DECLINED, otherApplication.getStatus());
+        verify(questNewsService).notifyApplicationApproved(quest, approvedApplication, creator);
+        verify(questNewsService).notifyApplicationDeclined(quest, otherApplication, creator);
     }
 
     @Test
@@ -194,6 +200,7 @@ class QuestApplicationServiceTest {
 
         assertEquals(QuestApplicationStatus.WITHDRAWN, result.getStatus());
         assertEquals(QuestApplicationStatus.WITHDRAWN, application.getStatus());
+        verify(questNewsService).notifyApplicationWithdrawn(quest, application, applicant);
     }
 
     @Test

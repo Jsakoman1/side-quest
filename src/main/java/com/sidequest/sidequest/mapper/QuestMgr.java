@@ -22,6 +22,11 @@ public class QuestMgr {
                 .title(quest.getTitle())
                 .description(quest.getDescription())
                 .awardAmount(quest.getAwardAmount())
+                .scheduledAt(quest.getScheduledAt())
+                .termFixed(quest.isTermFixed())
+                .pendingScheduledAt(quest.getPendingScheduledAt())
+                .pendingTermFixed(quest.getPendingTermFixed())
+                .reopenedAt(quest.getReopenedAt())
                 .status(quest.getStatus())
                 .build();
     }
@@ -36,6 +41,8 @@ public class QuestMgr {
         quest.setTitle(dto.getTitle());
         quest.setDescription(dto.getDescription());
         quest.setAwardAmount(dto.getAwardAmount());
+        quest.setScheduledAt(dto.getScheduledAt());
+        quest.setTermFixed(Boolean.TRUE.equals(dto.getTermFixed()));
         quest.setStatus(QuestStatus.OPEN);
 
         return quest;

@@ -4,6 +4,7 @@ import com.sidequest.sidequest.model.QuestStatus;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -20,6 +21,11 @@ public class QuestResponseDTO {
     private String description;
 
     private BigDecimal awardAmount;
+    private Instant scheduledAt;
+    private boolean termFixed;
+    private Instant pendingScheduledAt;
+    private Boolean pendingTermFixed;
+    private Instant reopenedAt;
 
     private QuestStatus status;
 

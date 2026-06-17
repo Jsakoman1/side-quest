@@ -5,6 +5,7 @@ import type {
   QuestApplicationStatus,
   QuestStatus
 } from "../shared/sidequestDomain.ts"
+import type {QuestNewsType} from "../shared/questNews.ts"
 
 export const API_BASE_URL = "http://localhost:8080"
 
@@ -23,6 +24,11 @@ export interface Quest {
   title: string
   description: string
   awardAmount: number
+  scheduledAt: string | null
+  termFixed: boolean
+  pendingScheduledAt: string | null
+  pendingTermFixed: boolean | null
+  reopenedAt: string | null
   status: QuestStatus
 }
 
@@ -46,10 +52,26 @@ export interface AppUser {
   role: AppUserRole
 }
 
+export interface QuestNewsItem {
+  id: number
+  type: QuestNewsType
+  title: string
+  message: string
+  questId: number
+  questTitle: string
+  applicationId: number | null
+  actorUserId: number
+  actorUsername: string
+  readAt: string | null
+  createdAt: string
+}
+
 export interface QuestRequest {
   title: string
   description: string
   awardAmount: number | null
+  scheduledAt?: string | null
+  termFixed?: boolean
   creatorId?: number
   status?: QuestStatus
 }
@@ -95,12 +117,36 @@ export const sidequestApi = {
     return (await api.patch(`/quests/${id}/complete`, {}, withAuth())).data
   },
 
+  async confirmQuestTermChange(id: number): Promise<Quest> {
+    return (await api.patch(`/quests/${id}/term/confirm`, {}, withAuth())).data
+  },
+
+  async rejectQuestTermChange(id: number): Promise<Quest> {
+    return (await api.patch(`/quests/${id}/term/reject`, {}, withAuth())).data
+  },
+
   async getQuestApplications(questId: number): Promise<QuestApplication[]> {
     return (await api.get<QuestApplication[]>(`/quests/${questId}/applications`, withAuth())).data
   },
 
   async getMyApplications(): Promise<QuestApplication[]> {
     return (await api.get<QuestApplication[]>("/quests/applications/me", withAuth())).data
+  },
+
+  async getMyNews(): Promise<QuestNewsItem[]> {
+    return (await api.get<QuestNewsItem[]>("/news/me", withAuth())).data
+  },
+
+  async getMyNewsUnreadCount(): Promise<number> {
+    return (await api.get<number>("/news/me/unread-count", withAuth())).data
+  },
+
+  async markMyNewsAsRead(): Promise<void> {
+    await api.patch("/news/me/read", {}, withAuth())
+  },
+
+  async markMyNewsItemAsRead(id: number): Promise<void> {
+    await api.patch(`/news/me/${id}/read`, {}, withAuth())
   },
 
   async applyForQuest(questId: number, dto: QuestApplicationRequest): Promise<QuestApplication> {

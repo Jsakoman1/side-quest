@@ -1,44 +1,34 @@
 <script setup lang="ts">
 import {computed, ref, watch} from "vue"
+import {useRouter} from "vue-router"
 import UiDialog from "../ui/UiDialog.vue"
 import DashboardEditSheet from "./DashboardEditSheet.vue"
 import UiStatusBanner from "../ui/UiStatusBanner.vue"
+import {useTimedBanner} from "../../composables/useTimedBanner.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 
 const props = defineProps<{
   dashboard: QuestDashboard
 }>()
 
+const router = useRouter()
 const application = computed(() => props.dashboard.selectedApplicationDialog)
 const isEditing = ref(false)
-const actionMessage = ref("")
-const actionMessageTone = ref<"success" | "warning">("success")
 const isWithdrawing = ref(false)
-let actionMessageTimeout: number | undefined
+const actionBanner = useTimedBanner()
+const actionMessage = actionBanner.message
+const actionMessageTone = actionBanner.tone
 
 watch(application, () => {
-  isEditing.value = false
-  actionMessage.value = ""
-  actionMessageTone.value = "success"
+  isEditing.value = application.value?.status === "PENDING"
+  actionBanner.clear()
   isWithdrawing.value = false
-
-  if (actionMessageTimeout !== undefined) {
-    window.clearTimeout(actionMessageTimeout)
-  }
 })
 
 const canEdit = computed(() => application.value?.status === "PENDING")
 
 const setActionMessage = (message: string, tone: "success" | "warning" = "success") => {
-  if (actionMessageTimeout !== undefined) {
-    window.clearTimeout(actionMessageTimeout)
-  }
-
-  actionMessage.value = message
-  actionMessageTone.value = tone
-  actionMessageTimeout = window.setTimeout(() => {
-    actionMessage.value = ""
-  }, 1800)
+  actionBanner.show(message, tone)
 }
 
 const withdrawApplication = () => {
@@ -113,8 +103,17 @@ const withdrawApplication = () => {
         </DashboardEditSheet>
       </form>
 
-      <div v-else-if="canEdit" class="dialog-sheet__footer">
-        <button class="button button--danger" type="button" :disabled="isWithdrawing" @click="withdrawApplication">
+      <div v-else class="dialog-sheet__footer">
+        <button class="button button--secondary" type="button" @click="router.push(`/quests/${application.questId}`)">
+          Open quest
+        </button>
+        <button
+          v-if="canEdit"
+          class="button button--danger"
+          type="button"
+          :disabled="isWithdrawing"
+          @click="withdrawApplication"
+        >
           Withdraw application
         </button>
       </div>
