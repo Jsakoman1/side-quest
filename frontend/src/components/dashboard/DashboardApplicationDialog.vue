@@ -69,8 +69,8 @@ const withdrawApplication = () => {
     size="lg"
     @close="props.dashboard.closeApplicationDialog()"
   >
-    <template v-if="canEdit && !isEditing" #actions>
-      <button class="button button--secondary" type="button" @click="isEditing = true">Edit</button>
+    <template #actions>
+      <button v-if="canEdit && !isEditing" class="button button--secondary" type="button" @click="isEditing = true">Edit</button>
     </template>
 
     <div v-if="application" class="stack dialog-sheet">
@@ -90,7 +90,7 @@ const withdrawApplication = () => {
           <span>$ {{ application!.proposedPrice }}</span>
           <span v-if="quest">Quest status: {{ props.dashboard.formatStatus(quest.status) }}</span>
         </div>
-      </div>
+      </section>
 
       <UiStatusBanner :message="actionMessage" :tone="actionMessageTone" />
 
