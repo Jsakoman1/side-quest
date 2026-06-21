@@ -1,6 +1,8 @@
 package com.sidequest.sidequest.service;
 
 import com.sidequest.sidequest.dto.QuestRequestDTO;
+import com.sidequest.sidequest.dto.QuestListResponseDTO;
+import com.sidequest.sidequest.dto.QuestResponseDTO;
 import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
@@ -15,36 +17,26 @@ import com.sidequest.sidequest.repository.QuestApplicationRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 @Service
+@RequiredArgsConstructor
 public class QuestService {
 
     private final QuestRepository questRepository;
     private final AppUserRepository appUserRepository;
     private final QuestApplicationRepository questApplicationRepository;
     private final QuestNewsService questNewsService;
-    private final CircleService circleService;
+    private final QuestVisibilityService questVisibilityService;
     private final QuestMgr questMgr;
-
-    public QuestService(
-            QuestRepository questRepository,
-            AppUserRepository appUserRepository,
-            QuestApplicationRepository questApplicationRepository,
-            QuestNewsService questNewsService,
-            CircleService circleService,
-            QuestMgr questMgr
-    ) {
-        this.questRepository = questRepository;
-        this.appUserRepository = appUserRepository;
-        this.questApplicationRepository = questApplicationRepository;
-        this.questNewsService = questNewsService;
-        this.circleService = circleService;
-        this.questMgr = questMgr;
-    }
 
     public Quest createQuest(QuestRequestDTO dto, AppUser currentUser) {
         validateQuestCreationTermInput(dto.getScheduledAt(), dto.getTermFixed());
@@ -59,13 +51,62 @@ public class QuestService {
 
     public List<Quest> getAllQuests(AppUser currentUser) {
         return questRepository.findAllWithCreator().stream()
-                .filter(quest -> canViewQuest(currentUser, quest))
+                .filter(quest -> questVisibilityService.canViewQuest(currentUser, quest))
                 .toList();
+    }
+
+    public QuestListResponseDTO searchQuests(
+            AppUser currentUser,
+            String query,
+            QuestStatus status,
+            QuestAudience audience,
+            LocalDate dateFrom,
+            LocalDate dateTo,
+            Boolean excludeMine,
+            Boolean withImages,
+            Boolean scheduledOnly,
+            String sort,
+            Integer page,
+            Integer size
+    ) {
+        String normalizedQuery = SearchQueryNormalizer.normalize(query).toLowerCase(Locale.ROOT);
+        boolean excludeCurrentUser = Boolean.TRUE.equals(excludeMine);
+        int safeSize = size == null || size < 1 ? 12 : size;
+        int safePage = page == null || page < 0 ? 0 : page;
+
+        List<Quest> quests = questRepository.findAllWithCreator().stream()
+                .filter(quest -> questVisibilityService.canViewQuest(currentUser, quest))
+                .filter(quest -> !excludeCurrentUser || currentUser == null || !quest.getCreator().getId().equals(currentUser.getId()))
+                .filter(quest -> status == null || quest.getStatus() == status)
+                .filter(quest -> audience == null || quest.getAudience() == audience)
+                .filter(quest -> matchesDateRange(quest, dateFrom, dateTo))
+                .filter(quest -> withImages == null || !withImages || (quest.getImages() != null && !quest.getImages().isEmpty()))
+                .filter(quest -> scheduledOnly == null || !scheduledOnly || quest.getScheduledAt() != null)
+                .filter(quest -> matchesQuery(quest, normalizedQuery))
+                .sorted(sortQuests(sort))
+                .toList();
+
+        int totalItems = quests.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / safeSize));
+        int start = Math.min(safePage * safeSize, totalItems);
+        int end = Math.min(start + safeSize, totalItems);
+
+        List<QuestResponseDTO> items = quests.subList(start, end).stream()
+                .map(questMgr::toDto)
+                .toList();
+
+        return QuestListResponseDTO.builder()
+                .items(items)
+                .page(safePage)
+                .size(safeSize)
+                .totalItems(totalItems)
+                .totalPages(totalPages)
+                .build();
     }
 
     public Quest getQuestById(Long id, AppUser currentUser) {
         Quest quest = requireQuest(id);
-        if (!canViewQuest(currentUser, quest)) {
+        if (!questVisibilityService.canViewQuest(currentUser, quest)) {
             throw ServiceErrors.notFound("Quest not found with id " + id);
         }
 
@@ -296,7 +337,7 @@ public class QuestService {
     private void reopenQuestApplications(Quest quest) {
         List<QuestApplication> reopenedApplications = new ArrayList<>();
         List<QuestApplication> applications = questApplicationRepository.findByQuestId(quest.getId());
-        if (applications == null || applications.isEmpty()) {
+        if (applications.isEmpty()) {
             return;
         }
 
@@ -316,7 +357,7 @@ public class QuestService {
 
     private void notifyQuestDeleted(Quest quest, AppUser actor) {
         List<QuestApplication> applications = questApplicationRepository.findByQuestId(quest.getId());
-        if (applications == null || applications.isEmpty()) {
+        if (applications.isEmpty()) {
             return;
         }
 
@@ -331,7 +372,7 @@ public class QuestService {
 
     private void notifyApprovedApplicant(Quest quest, AppUser actor, QuestNewsType type, String title, String message) {
         List<QuestApplication> approvedApplications = questApplicationRepository.findByQuestIdAndStatus(quest.getId(), QuestApplicationStatus.APPROVED);
-        if (approvedApplications == null || approvedApplications.isEmpty()) {
+        if (approvedApplications.isEmpty()) {
             return;
         }
 
@@ -346,7 +387,7 @@ public class QuestService {
 
     private void notifyQuestApplicants(Quest quest, AppUser actor, QuestNewsType type, String title, String message) {
         List<QuestApplication> applications = questApplicationRepository.findByQuestId(quest.getId());
-        if (applications == null || applications.isEmpty()) {
+        if (applications.isEmpty()) {
             return;
         }
 
@@ -444,6 +485,55 @@ public class QuestService {
         }
     }
 
+    private boolean matchesQuery(Quest quest, String query) {
+        if (query == null || query.isBlank()) {
+            return true;
+        }
+
+        return safeLower(quest.getTitle()).contains(query)
+                || safeLower(quest.getDescription()).contains(query)
+                || safeLower(quest.getCreator().getUsername()).contains(query);
+    }
+
+    private boolean matchesDateRange(Quest quest, LocalDate dateFrom, LocalDate dateTo) {
+        if (dateFrom == null && dateTo == null) {
+            return true;
+        }
+
+        if (quest.getScheduledAt() == null) {
+            return false;
+        }
+
+        LocalDate questDate = quest.getScheduledAt().atZone(ZoneOffset.UTC).toLocalDate();
+        if (dateFrom != null && questDate.isBefore(dateFrom)) {
+            return false;
+        }
+
+        return dateTo == null || !questDate.isAfter(dateTo);
+    }
+
+    private Comparator<Quest> sortQuests(String sort) {
+        String normalizedSort = sort == null ? "recommended" : sort.trim().toLowerCase(Locale.ROOT);
+
+        return switch (normalizedSort) {
+            case "newest" -> Comparator
+                    .comparing(Quest::getScheduledAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(Quest::getId, Comparator.reverseOrder());
+            case "highest" -> Comparator
+                    .comparing(Quest::getAwardAmount, Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(Quest::getScheduledAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(Quest::getId, Comparator.reverseOrder());
+            default -> Comparator
+                    .comparing(Quest::getAwardAmount, Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(Quest::getScheduledAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(Quest::getId, Comparator.reverseOrder());
+        };
+    }
+
+    private String safeLower(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
     private AppUser resolveQuestCreator(QuestRequestDTO dto, AppUser currentUser) {
         if (isAdmin(currentUser) && dto.getCreatorId() != null) {
             return requireAppUser(dto.getCreatorId());
@@ -456,19 +546,4 @@ public class QuestService {
         return user != null && user.getRole() == AppUserRole.ADMIN;
     }
 
-    private boolean canViewQuest(AppUser currentUser, Quest quest) {
-        if (quest == null) {
-            return false;
-        }
-
-        if (isAdmin(currentUser) || quest.getCreator().getId().equals(currentUser != null ? currentUser.getId() : null)) {
-            return true;
-        }
-
-        if (quest.getAudience() == QuestAudience.EVERYONE) {
-            return true;
-        }
-
-        return circleService.isCircleBetween(currentUser, quest.getCreator());
-    }
 }

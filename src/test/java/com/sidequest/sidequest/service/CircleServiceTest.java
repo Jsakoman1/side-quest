@@ -2,6 +2,7 @@ package com.sidequest.sidequest.service;
 
 import com.sidequest.sidequest.dto.CircleRequestCreateDTO;
 import com.sidequest.sidequest.dto.CircleBlockCreateDTO;
+import com.sidequest.sidequest.dto.CircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleRelationDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
 import com.sidequest.sidequest.dto.CircleRelationStatus;
@@ -10,8 +11,6 @@ import com.sidequest.sidequest.mapper.CircleRequestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.model.CircleRequest;
-import com.sidequest.sidequest.model.Quest;
-import com.sidequest.sidequest.model.QuestAudience;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.CircleRequestRepository;
 import org.junit.jupiter.api.Test;
@@ -48,6 +47,37 @@ class CircleServiceTest {
 
     @InjectMocks
     private CircleService circleService;
+
+    @Test
+    void deleteCircleRequestRejectsBlockedRelationship() {
+        AppUser blocker = createUser(1L, "blocker");
+        AppUser blocked = createUser(2L, "blocked");
+        CircleRequest relation = new CircleRequest();
+        relation.setId(3L);
+        relation.setRequester(blocker);
+        relation.setRecipient(blocked);
+        relation.setBlockedAt(Instant.now());
+        relation.setBlockedBy(blocker);
+        when(circleRequestRepository.findById(3L)).thenReturn(Optional.of(relation));
+
+        assertThrows(ResponseStatusException.class, () -> circleService.deleteCircleRequest(3L, blocked));
+    }
+
+    @Test
+    void getOverviewCombinesCircleCollections() {
+        AppUser currentUser = createUser(1L, "requester");
+        when(circleRequestRepository.findAcceptedByUserId(1L)).thenReturn(List.of());
+        when(circleRequestRepository.findIncomingPendingByRecipientId(1L)).thenReturn(List.of());
+        when(circleRequestRepository.findOutgoingPendingByRequesterId(1L)).thenReturn(List.of());
+        when(appUserRepository.findAll()).thenReturn(List.of(currentUser));
+
+        CircleOverviewDTO result = circleService.getOverview(currentUser);
+
+        assertEquals(List.of(), result.getCircles());
+        assertEquals(List.of(), result.getIncomingRequests());
+        assertEquals(List.of(), result.getOutgoingRequests());
+        assertEquals(List.of(), result.getInviteCandidates());
+    }
 
     @Test
     void createCircleRequestUsesAuthenticatedUserAsRequester() {
@@ -133,19 +163,84 @@ class CircleServiceTest {
                 request.getBlockedAt() != null
                         && request.getBlockedBy() == blocker
                         && request.getRequester() == blocker
-                        && request.getRecipient() == blocked
+                && request.getRecipient() == blocked
         ));
     }
 
     @Test
-    void canViewQuestAllowsEveryoneAudience() {
-        AppUser viewer = createUser(1L, "viewer");
-        AppUser creator = createUser(2L, "creator");
-        Quest quest = new Quest();
-        quest.setCreator(creator);
-        quest.setAudience(QuestAudience.EVERYONE);
+    void blockCircleUserRejectsDuplicateBlockBySameUser() {
+        AppUser blocker = createUser(1L, "blocker");
+        AppUser blocked = createUser(2L, "blocked");
+        CircleBlockCreateDTO dto = CircleBlockCreateDTO.builder()
+                .blockedUserId(blocked.getId())
+                .build();
 
-        assertEquals(true, circleService.canViewQuest(viewer, quest));
+        CircleRequest existingBlock = new CircleRequest();
+        existingBlock.setRequester(blocker);
+        existingBlock.setRecipient(blocked);
+        existingBlock.setBlockedAt(Instant.now());
+        existingBlock.setBlockedBy(blocker);
+
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(blocked));
+        when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.of(existingBlock));
+
+        assertThrows(ResponseStatusException.class, () -> circleService.blockCircleUser(dto, blocker));
+    }
+
+    @Test
+    void blockCircleUserRejectsWhenOtherUserAlreadyBlockedYou() {
+        AppUser blocker = createUser(1L, "blocker");
+        AppUser blocked = createUser(2L, "blocked");
+        CircleBlockCreateDTO dto = CircleBlockCreateDTO.builder()
+                .blockedUserId(blocked.getId())
+                .build();
+
+        CircleRequest existingBlock = new CircleRequest();
+        existingBlock.setRequester(blocked);
+        existingBlock.setRecipient(blocker);
+        existingBlock.setBlockedAt(Instant.now());
+        existingBlock.setBlockedBy(blocked);
+
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(blocked));
+        when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.of(existingBlock));
+
+        assertThrows(ResponseStatusException.class, () -> circleService.blockCircleUser(dto, blocker));
+    }
+
+    @Test
+    void unblockCircleUserDeletesBlockedRelationWhenRequesterIsBlocker() {
+        AppUser blocker = createUser(1L, "blocker");
+        AppUser blocked = createUser(2L, "blocked");
+
+        CircleRequest existingBlock = new CircleRequest();
+        existingBlock.setRequester(blocker);
+        existingBlock.setRecipient(blocked);
+        existingBlock.setBlockedAt(Instant.now());
+        existingBlock.setBlockedBy(blocker);
+
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(blocked));
+        when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.of(existingBlock));
+
+        circleService.unblockCircleUser(blocked.getId(), blocker);
+
+        verify(circleRequestRepository).delete(existingBlock);
+    }
+
+    @Test
+    void unblockCircleUserRejectsWhenCurrentUserDidNotCreateBlock() {
+        AppUser blocker = createUser(1L, "blocker");
+        AppUser blocked = createUser(2L, "blocked");
+
+        CircleRequest existingBlock = new CircleRequest();
+        existingBlock.setRequester(blocked);
+        existingBlock.setRecipient(blocker);
+        existingBlock.setBlockedAt(Instant.now());
+        existingBlock.setBlockedBy(blocked);
+
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(blocked));
+        when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.of(existingBlock));
+
+        assertThrows(ResponseStatusException.class, () -> circleService.unblockCircleUser(blocked.getId(), blocker));
     }
 
     @Test
@@ -205,6 +300,55 @@ class CircleServiceTest {
         assertEquals(1, result.size());
         assertEquals(CircleRelationStatus.BLOCKED, result.getFirst().getRelationStatus());
         assertEquals(true, result.getFirst().isBlockedByCurrentUser());
+    }
+
+    @Test
+    void getInviteCandidatesReturnsOnlyUsersWithoutExistingRelations() {
+        AppUser currentUser = createUser(1L, "requester");
+        AppUser available = createUser(2L, "available");
+        AppUser incomingRequester = createUser(3L, "incoming");
+        AppUser blockedUser = createUser(4L, "blocked");
+        AppUser circleUser = createUser(5L, "circle");
+        AppUser outgoingRecipient = createUser(6L, "outgoing");
+
+        CircleRequest incomingRequest = new CircleRequest();
+        incomingRequest.setRequester(incomingRequester);
+        incomingRequest.setRecipient(currentUser);
+
+        CircleRequest blockedRequest = new CircleRequest();
+        blockedRequest.setRequester(currentUser);
+        blockedRequest.setRecipient(blockedUser);
+        blockedRequest.setBlockedAt(Instant.now());
+        blockedRequest.setBlockedBy(currentUser);
+
+        CircleRequest circleRequest = new CircleRequest();
+        circleRequest.setRequester(currentUser);
+        circleRequest.setRecipient(circleUser);
+        circleRequest.setAcceptedAt(Instant.now());
+
+        CircleRequest outgoingRequest = new CircleRequest();
+        outgoingRequest.setRequester(currentUser);
+        outgoingRequest.setRecipient(outgoingRecipient);
+
+        when(appUserRepository.findAll()).thenReturn(List.of(
+                currentUser,
+                available,
+                incomingRequester,
+                blockedUser,
+                circleUser,
+                outgoingRecipient
+        ));
+        when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.empty());
+        when(circleRequestRepository.findBetweenUsers(1L, 3L)).thenReturn(Optional.of(incomingRequest));
+        when(circleRequestRepository.findBetweenUsers(1L, 4L)).thenReturn(Optional.of(blockedRequest));
+        when(circleRequestRepository.findBetweenUsers(1L, 5L)).thenReturn(Optional.of(circleRequest));
+        when(circleRequestRepository.findBetweenUsers(1L, 6L)).thenReturn(Optional.of(outgoingRequest));
+
+        List<CircleSearchResultDTO> result = circleService.getInviteCandidates(currentUser);
+
+        assertEquals(1, result.size());
+        assertEquals(2L, result.getFirst().getId());
+        assertEquals(CircleRelationStatus.NONE, result.getFirst().getRelationStatus());
     }
 
     @Test

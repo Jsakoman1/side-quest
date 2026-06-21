@@ -1,6 +1,10 @@
 package com.sidequest.sidequest.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -18,13 +22,13 @@ import java.util.List;
 @AllArgsConstructor
 public class QuestRequestDTO {
 
-    private @NotBlank String title;
-    private @NotBlank String description;
-    private BigDecimal awardAmount;
+    private @NotBlank @Size(max = 255) String title;
+    private @NotBlank @Size(max = 2000) String description;
+    private @NotNull @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal awardAmount;
     private Instant scheduledAt;
     private Boolean termFixed;
     private QuestAudience audience;
     private Long creatorId;
     private QuestStatus status;
-    private List<String> images;
+    private @Size(max = 10) List<String> images;
 }

@@ -1,11 +1,5 @@
-import axios from "axios"
-import {API_BASE_URL} from "./sidequestApi.ts"
-import {authHeader} from "../auth.ts"
+import {api, withAuth} from "./httpClient.ts"
 import type {AppUserRole} from "../shared/sidequestDomain.ts"
-
-const api = axios.create({
-  baseURL: API_BASE_URL
-})
 
 export interface AuthResponse {
   id: number
@@ -39,6 +33,6 @@ export const authApi = {
   },
 
   async me(): Promise<AuthResponse> {
-    return (await api.get("/auth/me", {headers: authHeader()})).data
+    return (await api.get("/auth/me", withAuth())).data
   }
 }

@@ -1,6 +1,8 @@
 package com.sidequest.sidequest.service;
 
 import com.sidequest.sidequest.dto.QuestRequestDTO;
+import com.sidequest.sidequest.dto.QuestListResponseDTO;
+import com.sidequest.sidequest.dto.QuestResponseDTO;
 import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
@@ -9,6 +11,7 @@ import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestApplication;
 import com.sidequest.sidequest.model.QuestApplicationStatus;
 import com.sidequest.sidequest.model.QuestStatus;
+import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.QuestApplicationRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,13 +41,16 @@ class QuestServiceTest {
     private QuestRepository questRepository;
 
     @Mock
+    private AppUserRepository appUserRepository;
+
+    @Mock
     private QuestApplicationRepository questApplicationRepository;
 
     @Mock
     private QuestNewsService questNewsService;
 
     @Mock
-    private CircleService circleService;
+    private QuestVisibilityService questVisibilityService;
 
     @Mock
     private QuestMgr questMgr;
@@ -94,12 +101,173 @@ class QuestServiceTest {
         hiddenQuest.setAudience(QuestAudience.CIRCLES);
 
         when(questRepository.findAllWithCreator()).thenReturn(List.of(visibleQuest, hiddenQuest));
-        when(circleService.isCircleBetween(currentUser, creator)).thenReturn(false);
+        when(questVisibilityService.canViewQuest(currentUser, visibleQuest)).thenReturn(true);
+        when(questVisibilityService.canViewQuest(currentUser, hiddenQuest)).thenReturn(false);
 
         List<Quest> result = questService.getAllQuests(currentUser);
 
         assertEquals(1, result.size());
         assertEquals(1L, result.getFirst().getId());
+    }
+
+    @Test
+    void getAllQuestsReturnsCircleQuestsForConnectedUsers() {
+        AppUser currentUser = createUser(5L, "viewer");
+        AppUser creator = createUser(6L, "creator");
+
+        Quest visibleQuest = new Quest();
+        visibleQuest.setId(3L);
+        visibleQuest.setCreator(creator);
+        visibleQuest.setAudience(QuestAudience.CIRCLES);
+
+        when(questRepository.findAllWithCreator()).thenReturn(List.of(visibleQuest));
+        when(questVisibilityService.canViewQuest(currentUser, visibleQuest)).thenReturn(true);
+
+        List<Quest> result = questService.getAllQuests(currentUser);
+
+        assertEquals(1, result.size());
+        assertEquals(3L, result.getFirst().getId());
+    }
+
+    @Test
+    void getAllQuestsReturnsEveryoneAudienceForAnyUser() {
+        AppUser currentUser = createUser(5L, "viewer");
+        AppUser creator = createUser(6L, "creator");
+
+        Quest visibleQuest = new Quest();
+        visibleQuest.setId(4L);
+        visibleQuest.setCreator(creator);
+        visibleQuest.setAudience(QuestAudience.EVERYONE);
+
+        when(questRepository.findAllWithCreator()).thenReturn(List.of(visibleQuest));
+        when(questVisibilityService.canViewQuest(currentUser, visibleQuest)).thenReturn(true);
+
+        List<Quest> result = questService.getAllQuests(currentUser);
+
+        assertEquals(1, result.size());
+        assertEquals(4L, result.getFirst().getId());
+    }
+
+    @Test
+    void searchQuestsFiltersByQueryAudienceAndPagination() {
+        AppUser currentUser = createUser(5L, "viewer");
+        AppUser creator = createUser(6L, "creator");
+
+        Quest firstQuest = new Quest();
+        firstQuest.setId(11L);
+        firstQuest.setCreator(creator);
+        firstQuest.setTitle("Fix the fence");
+        firstQuest.setDescription("Need help in the garden");
+        firstQuest.setAudience(QuestAudience.EVERYONE);
+        firstQuest.setAwardAmount(BigDecimal.valueOf(80));
+        firstQuest.setScheduledAt(Instant.parse("2026-01-10T10:00:00Z"));
+        firstQuest.setStatus(QuestStatus.OPEN);
+
+        Quest secondQuest = new Quest();
+        secondQuest.setId(12L);
+        secondQuest.setCreator(creator);
+        secondQuest.setTitle("Paint the shed");
+        secondQuest.setDescription("A small weekend task");
+        secondQuest.setAudience(QuestAudience.CIRCLES);
+        secondQuest.setAwardAmount(BigDecimal.valueOf(30));
+        secondQuest.setScheduledAt(Instant.parse("2026-01-11T10:00:00Z"));
+        secondQuest.setStatus(QuestStatus.OPEN);
+
+        when(questRepository.findAllWithCreator()).thenReturn(List.of(firstQuest, secondQuest));
+        when(questVisibilityService.canViewQuest(currentUser, firstQuest)).thenReturn(true);
+        when(questVisibilityService.canViewQuest(currentUser, secondQuest)).thenReturn(true);
+        when(questMgr.toDto(org.mockito.ArgumentMatchers.any(Quest.class))).thenAnswer(invocation -> {
+            Quest quest = invocation.getArgument(0);
+            return QuestResponseDTO.builder().id(quest.getId()).build();
+        });
+
+        QuestListResponseDTO result = questService.searchQuests(
+                currentUser,
+                "fence",
+                QuestStatus.OPEN,
+                QuestAudience.EVERYONE,
+                LocalDate.parse("2026-01-01"),
+                LocalDate.parse("2026-01-31"),
+                true,
+                false,
+                false,
+                "highest",
+                0,
+                10
+        );
+
+        assertEquals(1, result.getTotalItems());
+        assertEquals(1, result.getTotalPages());
+        assertEquals(11L, result.getItems().getFirst().getId());
+    }
+
+    @Test
+    void searchQuestsSupportsPaginationAcrossMultipleResults() {
+        AppUser currentUser = createUser(5L, "viewer");
+        AppUser creator = createUser(6L, "creator");
+
+        Quest firstQuest = new Quest();
+        firstQuest.setId(21L);
+        firstQuest.setCreator(creator);
+        firstQuest.setTitle("Quest A");
+        firstQuest.setAudience(QuestAudience.EVERYONE);
+        firstQuest.setAwardAmount(BigDecimal.valueOf(10));
+        firstQuest.setStatus(QuestStatus.OPEN);
+
+        Quest secondQuest = new Quest();
+        secondQuest.setId(22L);
+        secondQuest.setCreator(creator);
+        secondQuest.setTitle("Quest B");
+        secondQuest.setAudience(QuestAudience.EVERYONE);
+        secondQuest.setAwardAmount(BigDecimal.valueOf(20));
+        secondQuest.setStatus(QuestStatus.OPEN);
+
+        when(questRepository.findAllWithCreator()).thenReturn(List.of(firstQuest, secondQuest));
+        when(questVisibilityService.canViewQuest(currentUser, firstQuest)).thenReturn(true);
+        when(questVisibilityService.canViewQuest(currentUser, secondQuest)).thenReturn(true);
+        when(questMgr.toDto(org.mockito.ArgumentMatchers.any(Quest.class))).thenAnswer(invocation -> {
+            Quest quest = invocation.getArgument(0);
+            return QuestResponseDTO.builder().id(quest.getId()).build();
+        });
+
+        QuestListResponseDTO result = questService.searchQuests(
+                currentUser,
+                "",
+                null,
+                null,
+                null,
+                null,
+                false,
+                false,
+                false,
+                "recommended",
+                1,
+                1
+        );
+
+        assertEquals(2, result.getTotalItems());
+        assertEquals(2, result.getTotalPages());
+        assertEquals(21L, result.getItems().getFirst().getId());
+    }
+
+    @Test
+    void adminCanSeeCircleQuestsRegardlessOfRelationship() {
+        AppUser admin = createUser(5L, "admin");
+        admin.setRole(AppUserRole.ADMIN);
+        AppUser creator = createUser(6L, "creator");
+
+        Quest hiddenQuest = new Quest();
+        hiddenQuest.setId(5L);
+        hiddenQuest.setCreator(creator);
+        hiddenQuest.setAudience(QuestAudience.CIRCLES);
+
+        when(questRepository.findAllWithCreator()).thenReturn(List.of(hiddenQuest));
+        when(questVisibilityService.canViewQuest(admin, hiddenQuest)).thenReturn(true);
+
+        List<Quest> result = questService.getAllQuests(admin);
+
+        assertEquals(1, result.size());
+        assertEquals(5L, result.getFirst().getId());
     }
 
     @Test
@@ -146,6 +314,38 @@ class QuestServiceTest {
         assertEquals("Updated title", savedQuest.getTitle());
         assertEquals("Updated description", savedQuest.getDescription());
         assertEquals(BigDecimal.valueOf(80), savedQuest.getAwardAmount());
+    }
+
+    @Test
+    void adminUpdateQuestCanChangeCreatorAndStatus() {
+        AppUser admin = createUser(1L, "admin");
+        admin.setRole(AppUserRole.ADMIN);
+        AppUser originalCreator = createUser(3L, "original-creator");
+        AppUser newCreator = createUser(2L, "new-creator");
+
+        Quest quest = new Quest();
+        quest.setId(31L);
+        quest.setCreator(originalCreator);
+        quest.setStatus(QuestStatus.OPEN);
+
+        QuestRequestDTO requestDTO = QuestRequestDTO.builder()
+                .title("Updated title")
+                .description("Updated description")
+                .awardAmount(BigDecimal.valueOf(80))
+                .creatorId(newCreator.getId())
+                .status(QuestStatus.CANCELLED)
+                .build();
+
+        when(questRepository.findByIdWithCreator(31L)).thenReturn(Optional.of(quest));
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(newCreator));
+        when(questRepository.save(quest)).thenReturn(quest);
+
+        questService.updateQuest(31L, requestDTO, admin);
+
+        assertEquals(newCreator, quest.getCreator());
+        assertEquals(QuestStatus.CANCELLED, quest.getStatus());
+        assertEquals("Updated title", quest.getTitle());
+        assertEquals("Updated description", quest.getDescription());
     }
 
     @Test

@@ -13,32 +13,20 @@ import com.sidequest.sidequest.repository.QuestApplicationRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.Objects;
 
 @Service
+@RequiredArgsConstructor
 public class QuestApplicationService {
 
     private final QuestApplicationRepository questApplicationRepository;
     private final QuestRepository questRepository;
     private final QuestApplicationMgr questApplicationMgr;
     private final QuestNewsService questNewsService;
-    private final CircleService circleService;
-
-    public QuestApplicationService(
-            QuestApplicationRepository questApplicationRepository,
-            QuestRepository questRepository,
-            QuestApplicationMgr questApplicationMgr,
-            QuestNewsService questNewsService,
-            CircleService circleService
-    ) {
-        this.questApplicationRepository = questApplicationRepository;
-        this.questRepository = questRepository;
-        this.questApplicationMgr = questApplicationMgr;
-        this.questNewsService = questNewsService;
-        this.circleService = circleService;
-    }
+    private final QuestVisibilityService questVisibilityService;
 
     @Transactional
     public QuestApplicationResponseDTO applyForQuest(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
@@ -133,7 +121,7 @@ public class QuestApplicationService {
 
     private Quest requireVisibleOpenQuest(Long questId, AppUser currentUser) {
         Quest quest = requireQuest(questId);
-        if (!circleService.canViewQuest(currentUser, quest)) {
+        if (!questVisibilityService.canViewQuest(currentUser, quest)) {
             throw ServiceErrors.notFound("Quest not found with id " + questId);
         }
 
@@ -169,7 +157,7 @@ public class QuestApplicationService {
 
     private List<QuestApplication> declineOtherPendingApplications(Long questId, Long approvedApplicationId) {
         List<QuestApplication> pendingApplications = questApplicationRepository.findByQuestIdAndStatus(questId, QuestApplicationStatus.PENDING);
-        if (pendingApplications == null || pendingApplications.isEmpty()) {
+        if (pendingApplications.isEmpty()) {
             return List.of();
         }
 

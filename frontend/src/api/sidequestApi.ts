@@ -1,22 +1,13 @@
-import axios from "axios"
-import {authHeader} from "../auth.ts"
+import {api, API_BASE_URL, withAuth} from "./httpClient.ts"
 import type {
   AppUserRole,
+  CircleRelationStatus,
   QuestAudience,
   QuestApplicationStatus,
-  QuestStatus
+  QuestStatus,
+  QuestSortMode
 } from "../shared/sidequestDomain.ts"
 import type {QuestNewsType} from "../shared/questNews.ts"
-
-export const API_BASE_URL = "http://localhost:8080"
-
-const api = axios.create({
-  baseURL: API_BASE_URL
-})
-
-const withAuth = () => ({
-  headers: authHeader()
-})
 
 export interface Quest {
   id: number
@@ -35,6 +26,14 @@ export interface Quest {
   reopenedAt: string | null
   audience: QuestAudience
   status: QuestStatus
+}
+
+export interface QuestListResponse {
+  items: Quest[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
 }
 
 export interface QuestApplication {
@@ -86,13 +85,28 @@ export interface CircleCandidate {
   profileDescription: string | null
   profileAvatarDataUrl: string | null
   email: string
-  relationStatus: "NONE" | "CIRCLE" | "INCOMING_REQUEST" | "OUTGOING_REQUEST" | "BLOCKED"
+  relationStatus: CircleRelationStatus
   blockedByCurrentUser: boolean
 }
 
 export interface CircleRelation {
-  relationStatus: "NONE" | "CIRCLE" | "INCOMING_REQUEST" | "OUTGOING_REQUEST" | "BLOCKED"
+  relationStatus: CircleRelationStatus
   blockedByCurrentUser: boolean
+}
+
+export interface CircleContact {
+  relationId: number
+  userId: number
+  username: string
+  profileDescription: string | null
+  profileAvatarDataUrl: string | null
+}
+
+export interface CircleOverview {
+  circles: CircleContact[]
+  incomingRequests: CircleRequest[]
+  outgoingRequests: CircleRequest[]
+  inviteCandidates: CircleCandidate[]
 }
 
 export interface QuestNewsItem {
@@ -109,6 +123,22 @@ export interface QuestNewsItem {
   createdAt: string
 }
 
+export interface DashboardSummary {
+  questCount: number
+  visibleMyQuestsCount: number
+  pendingWorkApplicationsCount: number
+  activeWorkApplicationsCount: number
+  activeMyQuestsCount: number
+  activeWorkCount: number
+  completedMyQuestsCount: number
+  openQuestCount: number
+  assignedQuestCount: number
+  waitingConfirmationQuestCount: number
+  unreadNewsCount: number
+  totalUserCount: number
+  adminUserCount: number
+}
+
 export interface QuestRequest {
   title: string
   description: string
@@ -119,6 +149,20 @@ export interface QuestRequest {
   audience?: QuestAudience
   creatorId?: number
   status?: QuestStatus
+}
+
+export interface QuestSearchRequest {
+  q?: string
+  status?: QuestStatus | null
+  audience?: QuestAudience | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  excludeMine?: boolean
+  withImages?: boolean
+  scheduledOnly?: boolean
+  sort?: QuestSortMode
+  page?: number
+  size?: number
 }
 
 export interface QuestApplicationRequest {
@@ -146,6 +190,27 @@ export interface CircleBlockCreate {
 export const sidequestApi = {
   async getQuests(): Promise<Quest[]> {
     return (await api.get<Quest[]>("/quests", withAuth())).data
+  },
+
+  async searchQuests(params: QuestSearchRequest): Promise<QuestListResponse> {
+    const queryParams: Record<string, string | number | boolean> = {}
+
+    if (params.q) queryParams.q = params.q
+    if (params.status) queryParams.status = params.status
+    if (params.audience) queryParams.audience = params.audience
+    if (params.dateFrom) queryParams.dateFrom = params.dateFrom
+    if (params.dateTo) queryParams.dateTo = params.dateTo
+    if (params.excludeMine !== undefined) queryParams.excludeMine = params.excludeMine
+    if (params.withImages !== undefined) queryParams.withImages = params.withImages
+    if (params.scheduledOnly !== undefined) queryParams.scheduledOnly = params.scheduledOnly
+    if (params.sort) queryParams.sort = params.sort
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<QuestListResponse>("/quests/search", {
+      ...withAuth(),
+      params: queryParams
+    })).data
   },
 
   async getQuest(id: number): Promise<Quest> {
@@ -194,6 +259,10 @@ export const sidequestApi = {
 
   async getMyNewsUnreadCount(): Promise<number> {
     return (await api.get<number>("/news/me/unread-count", withAuth())).data
+  },
+
+  async getDashboardSummary(): Promise<DashboardSummary> {
+    return (await api.get<DashboardSummary>("/dashboard/me/summary", withAuth())).data
   },
 
   async markMyNewsAsRead(): Promise<void> {
@@ -252,12 +321,20 @@ export const sidequestApi = {
     return (await api.get<CircleRequest[]>("/circles", withAuth())).data
   },
 
+  async getCircleOverview(): Promise<CircleOverview> {
+    return (await api.get<CircleOverview>("/circles/me/overview", withAuth())).data
+  },
+
   async getIncomingCircleRequests(): Promise<CircleRequest[]> {
     return (await api.get<CircleRequest[]>("/circles/requests/incoming", withAuth())).data
   },
 
   async getOutgoingCircleRequests(): Promise<CircleRequest[]> {
     return (await api.get<CircleRequest[]>("/circles/requests/outgoing", withAuth())).data
+  },
+
+  async getInviteCandidates(): Promise<CircleCandidate[]> {
+    return (await api.get<CircleCandidate[]>("/circles/candidates", withAuth())).data
   },
 
   async getCircleRelation(userId: number): Promise<CircleRelation> {

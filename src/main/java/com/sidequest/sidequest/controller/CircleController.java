@@ -3,6 +3,7 @@ package com.sidequest.sidequest.controller;
 import com.sidequest.sidequest.dto.CircleRequestCreateDTO;
 import com.sidequest.sidequest.dto.CircleBlockCreateDTO;
 import com.sidequest.sidequest.dto.CircleRelationDTO;
+import com.sidequest.sidequest.dto.CircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
 import com.sidequest.sidequest.model.AppUser;
@@ -20,6 +21,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CircleController {
     private final CircleService circleService;
+
+    @GetMapping("/me/overview")
+    public CircleOverviewDTO getOverview(@AuthenticationPrincipal AppUser currentUser) {
+        return circleService.getOverview(currentUser);
+    }
 
     @GetMapping
     public List<CircleRequestResponseDTO> getMyCircles(@AuthenticationPrincipal AppUser currentUser) {

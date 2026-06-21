@@ -4,5 +4,13 @@ public enum QuestApplicationStatus {
     PENDING,
     APPROVED,
     DECLINED,
-    WITHDRAWN
+    WITHDRAWN;
+
+    public boolean isPending() {
+        return this == PENDING;
+    }
+
+    public boolean isActive() {
+        return this == PENDING || this == APPROVED;
+    }
 }

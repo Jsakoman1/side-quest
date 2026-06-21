@@ -6,8 +6,10 @@ import AppUsersHeader from "../components/app-users/AppUsersHeader.vue"
 import AppUsersList from "../components/app-users/AppUsersList.vue"
 import AdminShellHeader from "../components/admin/AdminShellHeader.vue"
 import UiDialog from "../components/ui/UiDialog.vue"
+import UiRequestError from "../components/ui/UiRequestError.vue"
 import {logoutUser} from "../auth.ts"
 import {useAppUsersPage} from "../composables/useAppUsersPage.ts"
+import {normalizeSearchQuery} from "../lib/searchQuery.ts"
 
 const usersPage = useAppUsersPage()
 
@@ -15,7 +17,7 @@ const router = useRouter()
 const userSearch = ref("")
 
 const filteredUsers = computed(() => {
-  const query = userSearch.value.trim().toLowerCase()
+  const query = normalizeSearchQuery(userSearch.value).toLowerCase()
   if (!query) {
     return usersPage.appUsers
   }
@@ -49,20 +51,7 @@ onMounted(() => {
           {{ usersPage.feedback }}
         </div>
 
-        <div v-if="usersPage.pageError" class="alert alert--error">
-          <div>{{ usersPage.pageError }}</div>
-          <details class="debug-details mt-2">
-            <summary class="debug-summary">User request debug details</summary>
-            <ul class="debug-list">
-              <li v-for="line in usersPage.pageErrorDetails" :key="line">{{ line }}</li>
-            </ul>
-            <div class="button-row mt-3">
-              <button class="button button--secondary debug-copy" type="button" @click="usersPage.copyDebugInfo">
-                {{ usersPage.copiedDebug ? "Copied" : "Copy debug info" }}
-              </button>
-            </div>
-          </details>
-        </div>
+        <UiRequestError :message="usersPage.pageError" :details="usersPage.pageErrorDetails" summary="User request debug details" :copied="usersPage.copiedDebug" @copy="usersPage.copyDebugInfo" />
 
         <div v-if="usersPage.isLoadingUsers" class="empty-state">
           Loading users...

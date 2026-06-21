@@ -3,6 +3,15 @@ import {computed, ref} from "vue"
 import UiDialog from "../ui/UiDialog.vue"
 import {formatInstantForInput} from "../../shared/questSchedule.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import {
+  endOfMonth,
+  formatTimeLabel,
+  parseDate,
+  parseDateKey,
+  startOfMonth,
+  startOfWeek,
+  toDateKey
+} from "../../lib/dashboardCalendar.ts"
 
 const props = defineProps<{
   dashboard: QuestDashboard
@@ -32,58 +41,6 @@ type MonthCell = {
 const today = new Date()
 today.setHours(0, 0, 0, 0)
 
-const pad = (value: number) => String(value).padStart(2, "0")
-
-const toDateKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-
-const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1)
-
-const endOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0)
-
-const startOfWeek = (date: Date) => {
-  const copy = new Date(date)
-  copy.setHours(0, 0, 0, 0)
-  const day = copy.getDay() === 0 ? 7 : copy.getDay()
-  copy.setDate(copy.getDate() - day + 1)
-  return copy
-}
-
-const parseDate = (value: string | null | undefined) => {
-  if (!value) {
-    return null
-  }
-
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
-const parseDateKey = (value: string | null | undefined) => {
-  if (!value) {
-    return null
-  }
-
-  const [year, month, day] = value.split("-").map((part) => Number(part))
-  if (!year || !month || !day) {
-    return null
-  }
-
-  const date = new Date(year, month - 1, day)
-  date.setHours(0, 0, 0, 0)
-  return date
-}
-
-const formatTimeLabel = (value: string | null | undefined) => {
-  const date = parseDate(value)
-  if (!date) {
-    return "All day"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date)
-}
-
 const accountCreatedAt = computed(() => {
   const createdAt = parseDate(props.dashboard.accountCreatedAt)
   if (!createdAt) {
@@ -106,10 +63,10 @@ const weekdayLabels = computed(() =>
 )
 
 const monthLabel = computed(() =>
-  new Intl.DateTimeFormat("en-GB", {
-    month: "long",
-    year: "numeric"
-  }).format(focusDate.value)
+    new Intl.DateTimeFormat("en-GB", {
+      month: "long",
+      year: "numeric"
+    }).format(focusDate.value)
 )
 
 const canGoPrevious = computed(() => {

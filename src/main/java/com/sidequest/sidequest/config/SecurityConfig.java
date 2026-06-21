@@ -32,6 +32,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/app_users/me").authenticated()
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/app_users/me").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/app_users/*").authenticated()
                         .requestMatchers("/app_users/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )

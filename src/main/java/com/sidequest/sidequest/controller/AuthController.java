@@ -8,6 +8,8 @@ import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.security.JwtService;
 import com.sidequest.sidequest.service.ServiceErrors;
+import com.sidequest.sidequest.service.UserInputNormalizer;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,17 +26,18 @@ public class AuthController {
     private final JwtService jwtService;
 
     @PostMapping("/register")
-    public AuthResponse register(@RequestBody RegisterRequest registerRequest) {
-        if (appUserRepository.existsByEmail(registerRequest.email())) {
+    public AuthResponse register(@Valid @RequestBody RegisterRequest registerRequest) {
+        String email = UserInputNormalizer.normalizeEmail(registerRequest.email());
+        if (appUserRepository.existsByEmail(email)) {
             throw ServiceErrors.conflict("Email already exists");
         }
 
-        AppUser savedAppUser = appUserRepository.save(buildRegisteredUser(registerRequest));
+        AppUser savedAppUser = appUserRepository.save(buildRegisteredUser(registerRequest, email));
         return buildAuthResponse(savedAppUser, jwtService.generateToken(savedAppUser));
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@RequestBody LoginRequest loginRequest) {
+    public AuthResponse login(@Valid @RequestBody LoginRequest loginRequest) {
         AppUser appUser = appUserRepository.findByEmail(loginRequest.email())
                 .orElseThrow(() -> ServiceErrors.unauthorized("Invalid email"));
 
@@ -51,9 +54,9 @@ public class AuthController {
         return buildAuthResponse(appUser, null);
     }
 
-    private AppUser buildRegisteredUser(RegisterRequest registerRequest) {
+    private AppUser buildRegisteredUser(RegisterRequest registerRequest, String email) {
         AppUser appUser = new AppUser();
-        appUser.setEmail(registerRequest.email());
+        appUser.setEmail(email);
         appUser.setUsername(registerRequest.username());
         appUser.setPasswordHash(passwordEncoder.encode(registerRequest.password()));
         appUser.setRole(AppUserRole.USER);

@@ -62,7 +62,7 @@ onBeforeUnmount(() => {
 
 <template>
   <header ref="topbarRef" class="dashboard-topbar">
-    <div class="dashboard-topbar__primary">
+    <div class="dashboard-topbar__primary u-row-between u-items-center u-gap-16">
       <div class="dashboard-brand">
         <div class="dashboard-brand__copy">
           <div class="brand__title">SideQuest</div>

@@ -1,19 +1,30 @@
 <script setup lang="ts">
-import {computed, ref, watch} from "vue"
+import {computed, ref} from "vue"
 import UiDialog from "../ui/UiDialog.vue"
-import DashboardEditSheet from "./DashboardEditSheet.vue"
 import UiStatusBanner from "../ui/UiStatusBanner.vue"
-import RichTextEditor from "../editor/RichTextEditor.vue"
 import ProfileBio from "../profile/ProfileBio.vue"
+import DashboardQuestApplications from "./DashboardQuestApplications.vue"
+import DashboardQuestApplyForm from "./DashboardQuestApplyForm.vue"
+import DashboardQuestEditForm from "./DashboardQuestEditForm.vue"
 import {richTextHasContent} from "../../shared/richText.ts"
-import {useTimedBanner} from "../../composables/useTimedBanner.ts"
+import {useDialogActionState} from "../../composables/useDialogActionState.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import {closeAfterDelay} from "../../lib/dialogFlow.ts"
+import {
+  canApplyToQuest,
+  canEditQuest,
+  canManageQuestExecution,
+  canRespondToTermChange as canRespondToTermChangeRule,
+  canShowQuestApplications,
+  isApprovedApplicantForQuest
+} from "../../lib/questAccess.ts"
 
 const props = defineProps<{
   dashboard: QuestDashboard
 }>()
 
 const quest = computed(() => props.dashboard.selectedQuestDialog)
+const isOwner = computed(() => quest.value ? props.dashboard.isMyQuest(quest.value) : false)
 const applications = computed(() => {
   if (!quest.value) {
     return []
@@ -25,35 +36,24 @@ const applications = computed(() => {
 const isEditing = ref(false)
 const isDeleting = ref(false)
 const isTermDecisioning = ref(false)
-const actionBanner = useTimedBanner()
-const actionMessage = actionBanner.message
-const actionMessageTone = actionBanner.tone
-
-watch(quest, () => {
+const actionBanner = useDialogActionState(quest, () => {
   isEditing.value = false
-  actionBanner.clear()
   isDeleting.value = false
   isTermDecisioning.value = false
 })
+const actionMessage = actionBanner.message
+const actionMessageTone = actionBanner.tone
 
 const canEdit = computed(() => {
-  if (!quest.value) {
-    return false
-  }
-
-  return props.dashboard.isMyQuest(quest.value) || props.dashboard.isAdmin()
+  return canEditQuest(quest.value, isOwner.value, props.dashboard.isAdmin())
 })
 
-const canApply = computed(() => {
-  if (!quest.value) {
-    return false
-  }
-
-  return quest.value.status === "OPEN"
-    && !props.dashboard.isMyQuest(quest.value)
-    && !props.dashboard.isAdmin()
-    && !props.dashboard.hasAppliedToQuest(quest.value.id)
-})
+const canApply = computed(() => canApplyToQuest(
+  quest.value,
+  isOwner.value,
+  props.dashboard.isAdmin(),
+  quest.value ? props.dashboard.hasAppliedToQuest(quest.value.id) : false
+))
 
 const applicationMessage = computed(() => {
   if (!quest.value) {
@@ -86,36 +86,24 @@ const approvedApplication = computed(() => {
 })
 
 const isApprovedApplicant = computed(() => {
-  if (!quest.value) {
-    return false
-  }
-
-  return props.dashboard.myApplications.some((application) => application.questId === quest.value?.id && application.status === "APPROVED")
+  return isApprovedApplicantForQuest(quest.value, props.dashboard.myApplications)
 })
 
 const canShowApplications = computed(() => {
-  return !!quest.value && (props.dashboard.isMyQuest(quest.value) || props.dashboard.isAdmin())
+  return canShowQuestApplications(quest.value, isOwner.value, props.dashboard.isAdmin())
 })
 
 const canRespondToTermChange = computed(() => {
-  if (!quest.value) {
-    return false
-  }
-
-  return quest.value.status === "WAITING_CONFIRMATION"
-    && (props.dashboard.isAdmin() || isApprovedApplicant.value)
+  return canRespondToTermChangeRule(quest.value, props.dashboard.isAdmin(), isApprovedApplicant.value)
 })
 
 const canManageExecution = computed(() => {
-  if (!quest.value) {
-    return false
-  }
-
-  if (quest.value.status !== "ASSIGNED" && quest.value.status !== "IN_PROGRESS") {
-    return false
-  }
-
-  return props.dashboard.isAdmin() || props.dashboard.isMyQuest(quest.value) || isApprovedApplicant.value
+  return canManageQuestExecution(
+    quest.value,
+    isOwner.value,
+    props.dashboard.isAdmin(),
+    isApprovedApplicant.value
+  )
 })
 
 const beginEditQuest = () => {
@@ -153,10 +141,10 @@ const closeQuest = () => {
     }
 
     setActionMessage("Quest deleted.")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       props.dashboard.closeQuestDialog()
       isDeleting.value = false
-    }, 900)
+    })
   })()
 }
 
@@ -173,11 +161,11 @@ const approveApplication = (applicationId: number) => {
     }
 
     setActionMessage("Application approved.")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       props.dashboard.closeQuestDialog()
       isEditing.value = false
       isDeleting.value = false
-    }, 900)
+    })
   })()
 }
 
@@ -194,11 +182,11 @@ const declineApplication = (applicationId: number) => {
     }
 
     setActionMessage("Application declined.", "warning")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       props.dashboard.closeQuestDialog()
       isEditing.value = false
       isDeleting.value = false
-    }, 900)
+    })
   })()
 }
 
@@ -219,10 +207,10 @@ const confirmTermChange = () => {
     }
 
     setActionMessage("Quest term confirmed.")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       props.dashboard.closeQuestDialog()
       isTermDecisioning.value = false
-    }, 900)
+    })
   })()
 }
 
@@ -243,10 +231,10 @@ const rejectTermChange = () => {
     }
 
     setActionMessage("Quest term change rejected.", "warning")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       props.dashboard.closeQuestDialog()
       isTermDecisioning.value = false
-    }, 900)
+    })
   })()
 }
 </script>
@@ -266,7 +254,7 @@ const rejectTermChange = () => {
 
     <div v-if="quest" class="stack dialog-sheet">
       <section v-if="myApplication && !isEditing" class="dialog-focus-card dialog-focus-card--application">
-        <div class="dialog-focus-card__top">
+        <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
           <span :class="['badge', props.dashboard.statusBadgeClass(myApplication.status)]">
             {{ props.dashboard.formatApplicationStatus(myApplication.status) }}
           </span>
@@ -283,7 +271,7 @@ const rejectTermChange = () => {
           :text="myApplication.message"
         />
 
-        <div class="dialog-focus-card__footer">
+        <div class="dialog-focus-card__footer u-row u-wrap u-gap-8">
           <button
             v-if="myApplication.status === 'PENDING'"
             class="button button--secondary"
@@ -299,7 +287,7 @@ const rejectTermChange = () => {
       </section>
 
       <section class="dialog-focus-card dialog-focus-card--primary">
-        <div class="dialog-focus-card__top">
+        <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
           <span :class="['badge', props.dashboard.statusBadgeClass(quest.status)]">
             {{ props.dashboard.formatStatus(quest.status) }}
           </span>
@@ -346,175 +334,32 @@ const rejectTermChange = () => {
         <div class="muted">Pending: {{ props.dashboard.formatQuestTermFromParts(quest.pendingScheduledAt, quest.pendingTermFixed ?? quest.termFixed) }}</div>
       </div>
 
-      <form v-if="canEdit && isEditing" class="stack" @submit.prevent="props.dashboard.saveEditedQuest">
-        <DashboardEditSheet :minimal="true">
-          <div class="dashboard-edit-form dashboard-edit-form--dialog">
-            <label class="field dashboard-edit-field dashboard-edit-field--message">
-              <span class="label">Award amount</span>
-              <div class="dashboard-edit-amount">
-                <span class="dashboard-edit-amount__symbol" aria-hidden="true">$</span>
-                <input v-model="props.dashboard.editQuestAwardAmount" class="input dashboard-edit-amount__input" inputmode="decimal" placeholder="50" />
-              </div>
-            </label>
+      <DashboardQuestEditForm
+        v-if="canEdit && isEditing"
+        :dashboard="props.dashboard"
+        @discard="props.dashboard.cancelEditingQuest(); isEditing = false"
+      />
 
-            <label class="field dashboard-edit-field dashboard-edit-field--price">
-              <span class="label">Title</span>
-              <input v-model="props.dashboard.editQuestTitle" class="input" />
-            </label>
-
-            <label class="field dashboard-edit-field">
-              <span class="label">Description</span>
-              <RichTextEditor
-                v-model="props.dashboard.editQuestDescription"
-                placeholder=""
-                toolbar-label="Description tools"
-              />
-            </label>
-
-            <label class="field dashboard-edit-field">
-              <span class="label">Scheduled time</span>
-              <input v-model="props.dashboard.editQuestScheduledAt" class="input" type="datetime-local" />
-            </label>
-
-            <label class="field dashboard-edit-field dashboard-edit-field--toggle">
-              <span class="label">Time type</span>
-              <div class="checkbox-field">
-                <input v-model="props.dashboard.editQuestTermFixed" type="checkbox" />
-                <span>Fixed term</span>
-              </div>
-            </label>
-
-            <label class="field dashboard-edit-field">
-              <span class="label">Who can see this</span>
-              <select v-model="props.dashboard.editQuestAudience" class="input">
-                <option v-for="option in props.dashboard.questAudienceOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-
-            <template v-if="props.dashboard.isAdmin()">
-              <label class="field dashboard-edit-field">
-                <span class="label">Creator</span>
-                <select v-model="props.dashboard.editQuestCreatorId" class="input">
-                  <option v-for="user in props.dashboard.appUsers" :key="user.id" :value="String(user.id)">
-                    {{ user.username }} ({{ user.email }})
-                  </option>
-                </select>
-              </label>
-
-              <label class="field dashboard-edit-field">
-                <span class="label">Status</span>
-                <select v-model="props.dashboard.editQuestStatus" class="input">
-                  <option v-for="option in props.dashboard.questStatusOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-            </template>
-          </div>
-
-          <template #actions>
-            <button class="button button--action" type="submit">Save changes</button>
-            <button class="button button--ghost" type="button" @click="props.dashboard.cancelEditingQuest(); isEditing = false">Discard changes</button>
-          </template>
-        </DashboardEditSheet>
-      </form>
-
-      <form v-else-if="canApply" class="stack calendar-application-form" autocomplete="off" @submit.prevent="props.dashboard.applyForQuest(quest.id)">
-        <DashboardEditSheet :minimal="true">
-          <div class="dashboard-edit-form dashboard-edit-form--dialog dashboard-edit-form--application">
-            <label class="field dashboard-edit-field">
-              <span class="label">Message</span>
-              <RichTextEditor
-                v-model="props.dashboard.applicationMessages[quest.id]"
-                autocomplete="off"
-                placeholder=""
-                toolbar-label="Message tools"
-              />
-            </label>
-
-            <label class="field dashboard-edit-field">
-              <div class="field__header">
-                <span class="label">Proposed price</span>
-                <button
-                  class="button button--ghost calendar-application-form__quickfill"
-                  type="button"
-                  @click="props.dashboard.proposedPrices[quest.id] = String(quest.awardAmount ?? '')"
-                >
-                  Use suggested
-                </button>
-              </div>
-              <div class="dashboard-edit-amount">
-                <span class="dashboard-edit-amount__symbol" aria-hidden="true">$</span>
-                <input
-                  v-model="props.dashboard.proposedPrices[quest.id]"
-                  class="input dashboard-edit-amount__input"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  :placeholder="String(quest.awardAmount ?? '')"
-                />
-              </div>
-            </label>
-          </div>
-
-          <template #actions>
-            <button class="button button--action" type="submit" :disabled="!canSubmitApplication">
-              Apply
-            </button>
-          </template>
-        </DashboardEditSheet>
-      </form>
+      <DashboardQuestApplyForm
+        v-else-if="canApply"
+        :dashboard="props.dashboard"
+        :quest="quest"
+        :can-submit="canSubmitApplication"
+      />
 
       <div v-else-if="quest.status === 'OPEN' && hasApplied" class="empty-state">
         Application sent. Check My applications.
       </div>
 
       <div v-else-if="quest.status !== 'CANCELLED'" class="stack dialog-sheet__section">
-        <div v-if="approvedApplication" class="dialog-application-card dialog-application-card--selected">
-          <div class="dialog-application-card__top">
-            <div class="dialog-application-card__identity">
-              <strong>Selected applicant</strong>
-            </div>
-          </div>
-          <div class="dialog-application-card__price">$ {{ approvedApplication.proposedPrice }}</div>
-          <ProfileBio
-            v-if="richTextHasContent(approvedApplication.message)"
-            class="dialog-application-card__message"
-            :text="approvedApplication.message"
-          />
-        </div>
-
-        <div v-else-if="canShowApplications" class="stack dialog-sheet__applications">
-          <div class="dialog-sheet__section-title">Applications</div>
-          <div v-if="applications.length" class="stack">
-            <div v-for="application in applications" :key="application.id" class="dialog-application-card">
-              <div class="dialog-application-card__top">
-                <div class="dialog-application-card__identity">
-                  <strong>{{ application.applicantUsername }}</strong>
-                </div>
-                <span :class="['badge', props.dashboard.statusBadgeClass(application.status)]">
-                  {{ props.dashboard.formatApplicationStatus(application.status) }}
-                </span>
-              </div>
-              <ProfileBio
-                v-if="richTextHasContent(application.message)"
-                class="dialog-application-card__message"
-                :text="application.message"
-              />
-              <div class="dialog-application-card__price">$ {{ application.proposedPrice }}</div>
-
-              <div class="button-row" v-if="application.status === 'PENDING'">
-                <button class="button button--secondary" type="button" @click="approveApplication(application.id)">Approve</button>
-                <button class="button button--danger" type="button" @click="declineApplication(application.id)">Decline</button>
-              </div>
-            </div>
-          </div>
-
-          <div v-else class="empty-state">
-            Nothing here yet.
-          </div>
-        </div>
+        <DashboardQuestApplications
+          :dashboard="props.dashboard"
+          :applications="applications"
+          :approved-application="approvedApplication"
+          :can-show-applications="canShowApplications"
+          @approve="approveApplication"
+          @decline="declineApplication"
+        />
       </div>
 
       <div v-else class="stack">

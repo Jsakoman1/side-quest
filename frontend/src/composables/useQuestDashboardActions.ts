@@ -1,9 +1,11 @@
 import {type QuestDashboardState} from "./useQuestDashboardState.ts"
-import {API_BASE_URL, sidequestApi} from "../api/sidequestApi.ts"
+import {API_BASE_URL} from "../api/httpClient.ts"
+import {sidequestApi} from "../api/sidequestApi.ts"
 import {buildRequestDebugInfo} from "../httpDebug.ts"
 import {isAdmin, currentUser} from "../auth.ts"
 import {compressImageFile, compressProfileAvatar} from "../shared/imageCompression.ts"
 import {richTextHasContent} from "../shared/richText.ts"
+import {canApplyToQuest, canEditQuest} from "../lib/questAccess.ts"
 
 export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const refreshDashboardData = async () => {
@@ -12,7 +14,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       fetchQuests(),
       fetchMyApplications(),
       fetchNews(),
-      fetchNewsUnreadCount(),
+      fetchDashboardSummary(),
       fetchIncomingCircleRequests(),
       fetchAppUsers()
     ])
@@ -63,10 +65,13 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     }
   }
 
-  const fetchNewsUnreadCount = async () => {
+  const fetchDashboardSummary = async () => {
     try {
-      state.unreadNewsCount.value = await sidequestApi.getMyNewsUnreadCount()
+      const summary = await sidequestApi.getDashboardSummary()
+      state.dashboardSummary.value = summary
+      state.unreadNewsCount.value = summary.unreadNewsCount
     } catch {
+      state.dashboardSummary.value = null
       state.unreadNewsCount.value = 0
     }
   }
@@ -82,7 +87,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const markNewsAsRead = async () => {
     try {
       await sidequestApi.markMyNewsAsRead()
-      await Promise.all([fetchNews(), fetchNewsUnreadCount()])
+      await Promise.all([fetchNews(), fetchDashboardSummary()])
       state.showFeedback("Updates marked as read.", "success")
     } catch {
       state.showFeedback("Could not mark updates as read.", "error")
@@ -92,7 +97,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const markNewsItemAsRead = async (newsId: number) => {
     try {
       await sidequestApi.markMyNewsItemAsRead(newsId)
-      await Promise.all([fetchNews(), fetchNewsUnreadCount()])
+      await Promise.all([fetchNews(), fetchDashboardSummary()])
     } catch {
       state.showFeedback("Could not mark update as read.", "error")
     }
@@ -182,20 +187,22 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     state.applicationDialogId.value = null
     state.questDialogId.value = questId
 
-    if (quest.status === "OPEN" && (state.isMyQuest(quest) || isAdmin())) {
+    if (canEditQuest(quest, state.isMyQuest(quest), isAdmin()) && quest.status === "OPEN") {
       state.startEditingQuest(quest)
     } else {
       state.cancelEditingQuest()
     }
 
-    if (state.isMyQuest(quest) || isAdmin()) {
+    if (canEditQuest(quest, state.isMyQuest(quest), isAdmin())) {
       await loadApplicationsForQuest(questId)
     }
 
-    const canApply = quest.status === "OPEN"
-      && !state.isMyQuest(quest)
-      && !isAdmin()
-      && !state.hasAppliedToQuest(quest.id)
+    const canApply = canApplyToQuest(
+      quest,
+      state.isMyQuest(quest),
+      isAdmin(),
+      state.hasAppliedToQuest(quest.id)
+    )
 
     if (canApply) {
       const suggestedPrice = quest.awardAmount ? String(quest.awardAmount) : ""
@@ -496,7 +503,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     fetchQuests,
     fetchMyApplications,
     fetchNews,
-    fetchNewsUnreadCount,
+    fetchDashboardSummary,
     fetchIncomingCircleRequests,
     markNewsAsRead,
     markNewsItemAsRead,

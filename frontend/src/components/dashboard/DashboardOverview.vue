@@ -2,53 +2,21 @@
 import {computed} from "vue"
 import DashboardWorkPlanner from "./DashboardWorkPlanner.vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import {buildRailGroup, formatRailDateTime, groupByStatus} from "../../lib/dashboardGroups.ts"
 
 const props = defineProps<{
   dashboard: QuestDashboard
 }>()
-
-type RailGroup<T> = {
-  key: string
-  label: string
-  items: T[]
-}
-
-const activeQuestGroups = computed<RailGroup<(typeof props.dashboard.activeMyQuests)[number]>[]>(() => {
-  const order = ["ASSIGNED", "WAITING_CONFIRMATION", "IN_PROGRESS"]
-  const grouped = new Map<string, (typeof props.dashboard.activeMyQuests)[number][]>()
-
-  for (const quest of props.dashboard.activeMyQuests) {
-    const bucket = grouped.get(quest.status) ?? []
-    bucket.push(quest)
-    grouped.set(quest.status, bucket)
-  }
-
-  return Array.from(grouped.entries())
-    .sort((left, right) => {
-      const leftIndex = order.indexOf(left[0])
-      const rightIndex = order.indexOf(right[0])
-      return (leftIndex === -1 ? order.length : leftIndex) - (rightIndex === -1 ? order.length : rightIndex)
-    })
-    .map(([status, items]) => ({
-      key: `active-${status}`,
-      label: props.dashboard.formatStatus(status),
-      items
-    }))
-})
-
-const activeOutgoingApplications = computed(() => props.dashboard.activeWorkApplications)
-
-const activeOutgoingGroups = computed<RailGroup<(typeof props.dashboard.activeWorkApplications)[number]>[]>(() => {
-  if (!activeOutgoingApplications.value.length) {
-    return []
-  }
-
-  return [{
-    key: "active-outgoing",
-    label: "Active",
-    items: activeOutgoingApplications.value
-  }]
-})
+const activeQuestGroups = computed(() => groupByStatus(
+  props.dashboard.activeMyQuests,
+  ["ASSIGNED", "WAITING_CONFIRMATION", "IN_PROGRESS"],
+  props.dashboard.formatStatus
+))
+const activeOutgoingGroups = computed(() => buildRailGroup(
+  "active-outgoing",
+  "Active",
+  props.dashboard.activeWorkApplications
+))
 
 const openQuest = (questId: number) => {
   props.dashboard.openQuestDialog(questId)
@@ -62,18 +30,6 @@ const openWork = () => {
   props.dashboard.openOpenWorkDialog()
 }
 
-const formatRailDateTime = (value: string | null | undefined) => {
-  if (!value) {
-    return "No scheduled time"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value))
-}
 </script>
 
 <template>
@@ -88,7 +44,7 @@ const formatRailDateTime = (value: string | null | undefined) => {
           <button class="overview-rail__cta-card overview-rail__cta-card--open" type="button" @click="openWork">
             <span class="overview-rail__cta-copy">
               <span class="overview-rail__cta-title">Open work</span>
-              <span class="overview-rail__cta-subtitle">{{ dashboard.visibleMyQuests.length }} need attention</span>
+              <span class="overview-rail__cta-subtitle">{{ dashboard.visibleMyQuestsCount }} need attention</span>
             </span>
             <span class="overview-rail__cta-arrow" aria-hidden="true">→</span>
           </button>
@@ -142,7 +98,7 @@ const formatRailDateTime = (value: string | null | undefined) => {
           <button class="overview-rail__cta-card overview-rail__cta-card--applications" type="button" @click="openApplications">
             <span class="overview-rail__cta-copy">
               <span class="overview-rail__cta-title">Applications</span>
-              <span class="overview-rail__cta-subtitle">{{ dashboard.pendingWorkApplications.length }} pending</span>
+              <span class="overview-rail__cta-subtitle">{{ dashboard.pendingWorkApplicationsCount }} pending</span>
             </span>
             <span class="overview-rail__cta-arrow" aria-hidden="true">→</span>
           </button>

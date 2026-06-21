@@ -1,25 +1,37 @@
-export const questStatusSortOrder = {
-  OPEN: 0,
-  ASSIGNED: 1,
-  WAITING_CONFIRMATION: 2,
-  IN_PROGRESS: 3,
-  COMPLETED: 4,
-  CANCELLED: 5
-} as const
-
-export const applicationStatusSortOrder = {
-  APPROVED: 0,
-  PENDING: 1,
-  DECLINED: 2,
-  WITHDRAWN: 3
-} as const
-
 export const formatQuestStatus = (status: string) => {
   if (status === "WAITING_CONFIRMATION") {
     return "Waiting confirmation"
   }
 
   return status.replaceAll("_", " ")
+}
+
+export const formatQuestLifecycleLabel = (status: string) => {
+  if (status === "OPEN") {
+    return "Open for applications"
+  }
+
+  if (status === "ASSIGNED") {
+    return "Assigned to a worker"
+  }
+
+  if (status === "WAITING_CONFIRMATION") {
+    return "Waiting on time confirmation"
+  }
+
+  if (status === "IN_PROGRESS") {
+    return "Work in progress"
+  }
+
+  if (status === "COMPLETED") {
+    return "Completed"
+  }
+
+  if (status === "CANCELLED") {
+    return "Cancelled"
+  }
+
+  return formatQuestStatus(status)
 }
 
 export const formatApplicationStatus = (status: string) => {

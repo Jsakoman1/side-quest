@@ -6,7 +6,7 @@ defineProps<{
 </script>
 
 <template>
-  <header class="page-header">
+  <header class="page-header u-row-between u-items-end u-wrap u-gap-16">
     <div>
       <h1 class="page-title">{{ title }}</h1>
       <p class="page-subtitle">{{ subtitle }}</p>

@@ -1,16 +1,20 @@
 package com.sidequest.sidequest.controller;
 
 import com.sidequest.sidequest.dto.QuestRequestDTO;
+import com.sidequest.sidequest.dto.QuestListResponseDTO;
 import com.sidequest.sidequest.dto.QuestResponseDTO;
 import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
+import com.sidequest.sidequest.model.QuestAudience;
 import com.sidequest.sidequest.model.Quest;
+import com.sidequest.sidequest.model.QuestStatus;
 import com.sidequest.sidequest.service.QuestService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @CrossOrigin(origins = "http://localhost:5173")
@@ -33,6 +37,24 @@ public class QuestController {
                 .stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    @GetMapping("/search")
+    public QuestListResponseDTO searchQuests(
+            @AuthenticationPrincipal AppUser currentUser,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) QuestStatus status,
+            @RequestParam(required = false) QuestAudience audience,
+            @RequestParam(required = false) LocalDate dateFrom,
+            @RequestParam(required = false) LocalDate dateTo,
+            @RequestParam(required = false) Boolean excludeMine,
+            @RequestParam(required = false) Boolean withImages,
+            @RequestParam(required = false) Boolean scheduledOnly,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return questService.searchQuests(currentUser, q, status, audience, dateFrom, dateTo, excludeMine, withImages, scheduledOnly, sort, page, size);
     }
 
     @GetMapping("/{id}")

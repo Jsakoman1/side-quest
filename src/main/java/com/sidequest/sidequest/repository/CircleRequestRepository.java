@@ -25,6 +25,7 @@ public interface CircleRequestRepository extends JpaRepository<CircleRequest, Lo
             join fetch c.recipient
             where c.recipient.id = :userId
               and c.acceptedAt is null
+              and c.blockedAt is null
             order by c.createdAt desc
             """)
     List<CircleRequest> findIncomingPendingByRecipientId(Long userId);
@@ -35,6 +36,7 @@ public interface CircleRequestRepository extends JpaRepository<CircleRequest, Lo
             join fetch c.recipient
             where c.requester.id = :userId
               and c.acceptedAt is null
+              and c.blockedAt is null
             order by c.createdAt desc
             """)
     List<CircleRequest> findOutgoingPendingByRequesterId(Long userId);

@@ -45,6 +45,45 @@ class AppUserServiceTest {
     private AppUserService appUserService;
 
     @Test
+    void createAppUserRejectsDuplicateEmailIgnoringCase() {
+        AppUserRequestDTO dto = new AppUserRequestDTO();
+        dto.setEmail(" Taken@Example.com ");
+        dto.setUsername("new-user");
+        dto.setPassword("strong-password");
+        when(appUserRepository.existsByEmail("taken@example.com")).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> appUserService.createAppUser(dto));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    void deleteUserRejectsDeletingCurrentUser() {
+        AppUser currentUser = new AppUser();
+        currentUser.setId(1L);
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(currentUser));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> appUserService.deleteUser(1L, currentUser));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    }
+
+    @Test
+    void deleteUserRejectsDeletingLastAdmin() {
+        AppUser currentUser = new AppUser();
+        currentUser.setId(1L);
+        AppUser lastAdmin = new AppUser();
+        lastAdmin.setId(2L);
+        lastAdmin.setRole(AppUserRole.ADMIN);
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(lastAdmin));
+        when(appUserRepository.countByRole(AppUserRole.ADMIN)).thenReturn(1L);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> appUserService.deleteUser(2L, currentUser));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
     void updateAppUserThrowsConflictWhenEmailAlreadyExistsOnAnotherUser() {
         AppUser existingUser = new AppUser();
         existingUser.setId(1L);

@@ -1,0 +1,49 @@
+<script setup lang="ts">
+import type {QuestApplication} from "../../api/sidequestApi.ts"
+import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import ProfileBio from "../profile/ProfileBio.vue"
+import {richTextHasContent} from "../../shared/richText.ts"
+
+defineProps<{
+  dashboard: QuestDashboard
+  applications: QuestApplication[]
+  approvedApplication: QuestApplication | null
+  canShowApplications: boolean
+}>()
+
+defineEmits<{
+  approve: [id: number]
+  decline: [id: number]
+}>()
+</script>
+
+<template>
+  <div v-if="approvedApplication" class="dialog-application-card dialog-application-card--selected">
+    <div class="dialog-application-card__top">
+      <strong>Selected applicant</strong>
+    </div>
+    <div class="dialog-application-card__price">$ {{ approvedApplication.proposedPrice }}</div>
+    <ProfileBio v-if="richTextHasContent(approvedApplication.message)" class="dialog-application-card__message" :text="approvedApplication.message" />
+  </div>
+
+  <div v-else-if="canShowApplications" class="stack dialog-sheet__applications">
+    <div class="dialog-sheet__section-title">Applications</div>
+    <div v-if="applications.length" class="stack">
+      <div v-for="application in applications" :key="application.id" class="dialog-application-card">
+        <div class="dialog-application-card__top">
+          <strong>{{ application.applicantUsername }}</strong>
+          <span :class="['badge', dashboard.statusBadgeClass(application.status)]">
+            {{ dashboard.formatApplicationStatus(application.status) }}
+          </span>
+        </div>
+        <ProfileBio v-if="richTextHasContent(application.message)" class="dialog-application-card__message" :text="application.message" />
+        <div class="dialog-application-card__price">$ {{ application.proposedPrice }}</div>
+        <div v-if="application.status === 'PENDING'" class="button-row">
+          <button class="button button--secondary" type="button" @click="$emit('approve', application.id)">Approve</button>
+          <button class="button button--danger" type="button" @click="$emit('decline', application.id)">Decline</button>
+        </div>
+      </div>
+    </div>
+    <div v-else class="empty-state">Nothing here yet.</div>
+  </div>
+</template>

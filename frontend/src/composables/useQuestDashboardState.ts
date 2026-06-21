@@ -2,12 +2,10 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue"
 import {useRoute, useRouter} from "vue-router"
 import {currentUser, isAdmin} from "../auth.ts"
 import {formatDebugInfo} from "../httpDebug.ts"
-import {type AppUser, type CircleRequest, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
+import {type AppUser, type CircleRequest, type DashboardSummary, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
 import {
-  applicationStatusSortOrder,
   formatApplicationStatus,
   formatQuestStatus,
-  questStatusSortOrder,
   statusBadgeClass,
   statusSurfaceClass
 } from "../lib/questDashboardRules.ts"
@@ -17,8 +15,11 @@ import {
   formatQuestTerm,
   parseInstantFromInput
 } from "../shared/questSchedule.ts"
+import {useTimedBanner} from "./useTimedBanner.ts"
 import {
   dashboardTabs,
+  applicationStatusSortOrder,
+  questStatusSortOrder,
   questAudienceOptions,
   questStatusOptions,
   type DashboardTab,
@@ -37,6 +38,7 @@ export const useQuestDashboardState = () => {
   const myApplications = ref<QuestApplication[]>([])
   const newsItems = ref<QuestNewsItem[]>([])
   const unreadNewsCount = ref(0)
+  const dashboardSummary = ref<DashboardSummary | null>(null)
   const incomingCircleRequests = ref<CircleRequest[]>([])
   const appUsers = ref<AppUser[]>([])
 
@@ -53,10 +55,11 @@ export const useQuestDashboardState = () => {
   const newsErrorDetails = ref<string[]>([])
   const usersError = ref("")
   const usersErrorDetails = ref<string[]>([])
+  const copiedDebugBanner = useTimedBanner(1500)
+  const copiedDebug = computed(() => !!copiedDebugBanner.message.value)
 
   const feedback = ref("")
   const feedbackType = ref<"error" | "success">("success")
-  const copiedDebug = ref(false)
   const isProfileEditDialogOpen = ref(false)
   const isNotificationsDialogOpen = ref(false)
   const successPulseTarget = ref("")
@@ -184,7 +187,12 @@ export const useQuestDashboardState = () => {
       && (application.questStatus === "ASSIGNED" || application.questStatus === "IN_PROGRESS" || application.questStatus === "WAITING_CONFIRMATION")
   }))
   const pendingWorkApplications = computed(() => sortedMyApplications.value.filter((application) => application.status === "PENDING"))
-  const activeWorkCount = computed(() => activeMyQuests.value.length + activeWorkApplications.value.length)
+  const visibleMyQuestsCount = computed(() => dashboardSummary.value?.visibleMyQuestsCount ?? 0)
+  const pendingWorkApplicationsCount = computed(() => dashboardSummary.value?.pendingWorkApplicationsCount ?? 0)
+  const activeWorkApplicationsCount = computed(() => dashboardSummary.value?.activeWorkApplicationsCount ?? 0)
+  const activeMyQuestsCount = computed(() => dashboardSummary.value?.activeMyQuestsCount ?? 0)
+  const activeWorkCount = computed(() => dashboardSummary.value?.activeWorkCount ?? 0)
+  const completedMyQuestsCount = computed(() => dashboardSummary.value?.completedMyQuestsCount ?? 0)
   const incomingWorkQuests = computed(() => myQuests.value.filter((quest) => quest.status !== "COMPLETED" && quest.status !== "CANCELLED"))
   const outgoingWorkApplications = computed(() => sortedMyApplications.value.filter((application) => {
     return application.status === "PENDING" || application.status === "APPROVED"
@@ -194,27 +202,11 @@ export const useQuestDashboardState = () => {
   const recentNewsItems = computed(() => newsItems.value.slice(0, 6))
   const unreadNewsItems = computed(() => newsItems.value.filter((item) => item.readAt === null))
   const recentIncomingCircleRequests = computed(() => incomingCircleRequests.value.slice(0, 4))
-  const questCount = computed(() => sortedQuests.value.length)
-  const waitingConfirmationQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "WAITING_CONFIRMATION").length)
-  const openQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "OPEN").length)
-  const assignedQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "ASSIGNED").length)
-  const activeQuestCount = computed(() => activeWorkCount.value)
-  const totalUserCount = computed(() => appUsers.value.length)
-  const adminUserCount = computed(() => appUsers.value.filter((user) => user.role === "ADMIN").length)
-
-  const countMyQuestsByStatus = (status: QuestStatus) => {
-    return myQuests.value.filter((quest) => quest.status === status).length
-  }
-
-  const countMyApplicationsByStatus = (status: string) => {
-    return sortedMyApplications.value.filter((application) => application.status === status).length
-  }
-
   const overviewCards = computed(() => [
     {id: "active-work" as OverviewFocus, label: "Active work", value: activeWorkCount.value, hint: "Jobs you can act on now", tab: "overview" as DashboardTab},
-    {id: "posted-work" as OverviewFocus, label: "Your jobs", value: visibleMyQuests.value.length, hint: "Jobs you manage", tab: "create-job" as DashboardTab},
-    {id: "applied-tasks" as OverviewFocus, label: "Pending applications", value: visibleMyApplications.value.length, hint: "Jobs waiting for a reply", tab: "find-work" as DashboardTab},
-    {id: "completed" as OverviewFocus, label: "Completed", value: myQuests.value.filter((quest) => quest.status === "COMPLETED").length, hint: "Finished jobs", tab: "create-job" as DashboardTab}
+    {id: "posted-work" as OverviewFocus, label: "Your jobs", value: visibleMyQuestsCount.value, hint: "Jobs you manage", tab: "create-job" as DashboardTab},
+    {id: "applied-tasks" as OverviewFocus, label: "Pending applications", value: pendingWorkApplicationsCount.value, hint: "Jobs waiting for a reply", tab: "find-work" as DashboardTab},
+    {id: "completed" as OverviewFocus, label: "Completed", value: completedMyQuestsCount.value, hint: "Finished jobs", tab: "create-job" as DashboardTab}
   ])
 
   const applicationsForQuest = (questId: number) => applicationsByQuestId.value[questId] ?? []
@@ -609,10 +601,7 @@ export const useQuestDashboardState = () => {
     }
 
     await navigator.clipboard.writeText(formatDebugInfo(lines))
-    copiedDebug.value = true
-    window.setTimeout(() => {
-      copiedDebug.value = false
-    }, 1500)
+    copiedDebugBanner.show("Copied")
   }
 
   const init = () => undefined
@@ -625,6 +614,7 @@ export const useQuestDashboardState = () => {
     myApplications,
     newsItems,
     unreadNewsCount,
+    dashboardSummary,
     incomingCircleRequests,
     appUsers,
     isLoadingQuests,
@@ -703,6 +693,10 @@ export const useQuestDashboardState = () => {
     recentMyApplications,
     activeWorkApplications,
     pendingWorkApplications,
+    visibleMyQuestsCount,
+    pendingWorkApplicationsCount,
+    activeWorkApplicationsCount,
+    activeMyQuestsCount,
     activeWorkCount,
     incomingWorkQuests,
     outgoingWorkApplications,
@@ -711,15 +705,6 @@ export const useQuestDashboardState = () => {
     recentNewsItems,
     unreadNewsItems,
     recentIncomingCircleRequests,
-    questCount,
-    waitingConfirmationQuestCount,
-    openQuestCount,
-    assignedQuestCount,
-    activeQuestCount,
-    totalUserCount,
-    adminUserCount,
-    countMyQuestsByStatus,
-    countMyApplicationsByStatus,
     overviewCards,
     applicationsForQuest,
     questForId,

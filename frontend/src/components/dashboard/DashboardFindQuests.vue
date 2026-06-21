@@ -3,6 +3,13 @@ import {computed, ref} from "vue"
 import DashboardQuestSummaryRow from "./DashboardQuestSummaryRow.vue"
 import DashboardSectionHeader from "./DashboardSectionHeader.vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import {type Quest} from "../../api/sidequestApi.ts"
+import type {QuestAudience} from "../../shared/sidequestDomain.ts"
+import {formatQuestLifecycleLabel} from "../../lib/questDashboardRules.ts"
+import {normalizeSearchQuery} from "../../lib/searchQuery.ts"
+import {buildQuestSearchParams} from "../../lib/questSearch.ts"
+import {useQuestSearchResults} from "../../composables/useQuestSearchResults.ts"
+import UiPagination from "../ui/UiPagination.vue"
 
 const props = withDefaults(defineProps<{
   dashboard: QuestDashboard
@@ -15,46 +22,42 @@ const searchQuery = ref("")
 const sortMode = ref<"recommended" | "newest" | "highest">("recommended")
 const photoOnly = ref(false)
 const scheduledOnly = ref(false)
+const audienceFilter = ref<QuestAudience | "ALL">("ALL")
+const dateFrom = ref("")
+const dateTo = ref("")
+const itemsPerPage = 6
+const {results: questResults, loadQuests, watchAndReload} = useQuestSearchResults(itemsPerPage, (page) => buildQuestSearchParams({
+  q: normalizeSearchQuery(searchQuery.value),
+  status: "OPEN",
+  audience: audienceFilter.value === "ALL" ? null : audienceFilter.value,
+  dateFrom: dateFrom.value || null,
+  dateTo: dateTo.value || null,
+  excludeMine: true,
+  withImages: photoOnly.value || undefined,
+  scheduledOnly: scheduledOnly.value || undefined,
+  sort: sortMode.value,
+  page,
+  size: itemsPerPage
+}))
+const pagedQuests = computed(() => questResults.items.value)
+const totalItems = questResults.totalItems
+const totalPages = questResults.totalPages
+const currentPage = questResults.currentPage
+const isLoading = questResults.isLoading
+const pageStart = questResults.pageStart
+const pageEnd = questResults.pageEnd
+const hasPreviousPage = questResults.hasPreviousPage
+const hasNextPage = questResults.hasNextPage
 
-const filteredQuests = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
+watchAndReload([searchQuery, sortMode, photoOnly, scheduledOnly, audienceFilter, dateFrom, dateTo])
 
-  const items = props.dashboard.availableQuests.filter((quest) => {
-    if (photoOnly.value && !quest.images?.length) {
-      return false
-    }
+const previousPage = () => {
+  void questResults.previousPage(loadQuests)
+}
 
-    if (scheduledOnly.value && !quest.scheduledAt) {
-      return false
-    }
-
-    if (!query) {
-      return true
-    }
-
-    return [quest.title, quest.description, quest.creatorUsername]
-      .join(" ")
-      .toLowerCase()
-      .includes(query)
-  })
-
-  return [...items].sort((left, right) => {
-    if (sortMode.value === "highest") {
-      return (right.awardAmount ?? 0) - (left.awardAmount ?? 0)
-    }
-
-    if (sortMode.value === "newest") {
-      return new Date(right.scheduledAt ?? 0).getTime() - new Date(left.scheduledAt ?? 0).getTime()
-    }
-
-    const leftScheduled = left.scheduledAt ? new Date(left.scheduledAt).getTime() : Number.POSITIVE_INFINITY
-    const rightScheduled = right.scheduledAt ? new Date(right.scheduledAt).getTime() : Number.POSITIVE_INFINITY
-
-    return (right.awardAmount ?? 0) - (left.awardAmount ?? 0)
-      || leftScheduled - rightScheduled
-      || (right.id - left.id)
-  })
-})
+const nextPage = () => {
+  void questResults.nextPage(loadQuests)
+}
 </script>
 
 <template>
@@ -78,6 +81,30 @@ const filteredQuests = computed(() => {
         </label>
       </div>
 
+      <div class="grid grid--two dashboard-find-work__advanced-filters">
+        <label class="field">
+          <span class="label">Audience</span>
+          <select v-model="audienceFilter" class="input">
+            <option value="ALL">All</option>
+            <option v-for="option in props.dashboard.questAudienceOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <div class="grid grid--two">
+          <label class="field">
+            <span class="label">From date</span>
+            <input v-model="dateFrom" class="input" type="date" />
+          </label>
+
+          <label class="field">
+            <span class="label">To date</span>
+            <input v-model="dateTo" class="input" type="date" />
+          </label>
+        </div>
+      </div>
+
       <div class="dashboard-find-work__filters">
         <button class="segment" :class="{ 'segment--active': !photoOnly }" type="button" @click="photoOnly = false">
           All
@@ -93,43 +120,62 @@ const filteredQuests = computed(() => {
         </button>
       </div>
 
-      <div v-if="!filteredQuests.length" class="empty-state">
-        No matching open jobs.
+      <div v-if="isLoading" class="empty-state">
+        Loading quests...
       </div>
 
-      <div v-else class="dashboard-find-work__grid">
-        <button
-          v-for="quest in filteredQuests"
-          :key="quest.id"
-          type="button"
-          class="find-work-card"
-          @click="dashboard.openQuestDialog(quest.id)"
-        >
-          <div v-if="quest.images?.length" class="find-work-card__media">
-            <img :src="quest.images[0]" alt="Quest image preview" class="find-work-card__image">
+      <template v-else>
+        <div v-if="!pagedQuests.length" class="empty-state">
+          No matching open jobs.
+        </div>
+
+        <template v-else>
+          <UiPagination :label="`Showing ${pageStart}-${pageEnd} of ${totalItems}`" :has-previous="hasPreviousPage" :has-next="hasNextPage" @previous="previousPage" @next="nextPage" />
+
+          <div class="dashboard-find-work__grid">
+            <button
+              v-for="quest in pagedQuests"
+              :key="quest.id"
+              type="button"
+              class="find-work-card"
+              @click="dashboard.openQuestDialog(quest.id)"
+            >
+              <div v-if="quest.images?.length" class="find-work-card__media">
+                <img :src="quest.images[0]" alt="Quest image preview" class="find-work-card__image">
+              </div>
+
+              <div class="find-work-card__body">
+                <DashboardQuestSummaryRow
+                  primary-label="Amount"
+                  :primary-value="quest.awardAmount"
+                  money-tone="income"
+                  secondary-label="Term"
+                  :secondary-value="dashboard.formatQuestTermLabel(quest)"
+                  :title="quest.title"
+                  :description="quest.description"
+                  description-class="quest-summary-clamp"
+                  :reserve-secondary-space="false"
+                  :reserve-description-space="false"
+                >
+                  <template #meta>
+                    <span class="badge badge--accent">{{ formatQuestLifecycleLabel(quest.status) }}</span>
+                    <span class="badge badge--secondary">{{ quest.audience === "EVERYONE" ? "Everyone" : "Circles" }}</span>
+                    <span v-if="quest.termFixed" class="badge badge--success">Fixed time</span>
+                    <span v-else class="badge badge--warning">Flexible time</span>
+                  </template>
+                </DashboardQuestSummaryRow>
+
+                <div class="find-work-card__footer">
+                  <span class="badge badge--accent">$ {{ quest.awardAmount }}</span>
+                  <span class="muted">{{ quest.creatorUsername }}</span>
+                </div>
+              </div>
+            </button>
           </div>
 
-          <div class="find-work-card__body">
-            <DashboardQuestSummaryRow
-              primary-label="Amount"
-              :primary-value="quest.awardAmount"
-              money-tone="income"
-              secondary-label="Term"
-              :secondary-value="dashboard.formatQuestTermLabel(quest)"
-              :title="quest.title"
-              :description="quest.description"
-              description-class="quest-summary-clamp"
-              :reserve-secondary-space="false"
-              :reserve-description-space="false"
-            />
-
-            <div class="find-work-card__footer">
-              <span class="badge badge--accent">$ {{ quest.awardAmount }}</span>
-              <span class="muted">{{ quest.creatorUsername }}</span>
-            </div>
-          </div>
-        </button>
-      </div>
+          <UiPagination class="dashboard-find-work__pagination--bottom" :label="`Page ${currentPage} of ${totalPages}`" :has-previous="hasPreviousPage" :has-next="hasNextPage" @previous="previousPage" @next="nextPage" />
+        </template>
+      </template>
     </div>
   </section>
 </template>

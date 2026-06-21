@@ -42,7 +42,7 @@ class QuestApplicationServiceTest {
     private QuestNewsService questNewsService;
 
     @Mock
-    private CircleService circleService;
+    private QuestVisibilityService questVisibilityService;
 
     @InjectMocks
     private QuestApplicationService questApplicationService;
@@ -64,7 +64,7 @@ class QuestApplicationServiceTest {
                 .build();
 
         when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
-        when(circleService.canViewQuest(applicant, quest)).thenReturn(true);
+        when(questVisibilityService.canViewQuest(applicant, quest)).thenReturn(true);
         when(questApplicationRepository.existsByQuestIdAndApplicantId(7L, 2L)).thenReturn(false);
         when(questApplicationMgr.toEntity(requestDTO, quest, applicant)).thenReturn(application);
         when(questApplicationRepository.save(application)).thenReturn(savedApplication);
@@ -86,7 +86,7 @@ class QuestApplicationServiceTest {
                 .build();
 
         when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
-        when(circleService.canViewQuest(creator, quest)).thenReturn(true);
+        when(questVisibilityService.canViewQuest(creator, quest)).thenReturn(true);
 
         assertThrows(ResponseStatusException.class, () -> questApplicationService.applyForQuest(7L, requestDTO, creator));
     }
@@ -101,7 +101,7 @@ class QuestApplicationServiceTest {
                 .build();
 
         when(questRepository.findByIdWithCreator(7L)).thenReturn(Optional.of(quest));
-        when(circleService.canViewQuest(applicant, quest)).thenReturn(true);
+        when(questVisibilityService.canViewQuest(applicant, quest)).thenReturn(true);
 
         assertThrows(ResponseStatusException.class, () -> questApplicationService.applyForQuest(7L, requestDTO, applicant));
     }

@@ -9,34 +9,24 @@ import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class AppUserService {
-    private static final int MAX_PROFILE_AVATAR_DATA_URL_LENGTH = 250_000;
-
     private final AppUserRepository appUserRepository;
     private final QuestRepository questRepository;
     private final PasswordEncoder passwordEncoder;
     private final QuestMgr questMgr;
 
-    public AppUserService(
-            AppUserRepository appUserRepository,
-            QuestRepository questRepository,
-            QuestMgr questMgr,
-            PasswordEncoder passwordEncoder
-    ) {
-        this.appUserRepository = appUserRepository;
-        this.questRepository = questRepository;
-        this.questMgr = questMgr;
-        this.passwordEncoder = passwordEncoder;
-    }
-
     public AppUser createAppUser(AppUserRequestDTO dto) {
         validatePassword(dto.getPassword());
+        String email = UserInputNormalizer.normalizeEmail(dto.getEmail());
+        validateUniqueEmail(null, email);
         AppUser appUser = new AppUser();
-        appUser.setEmail(dto.getEmail());
+        appUser.setEmail(email);
         appUser.setUsername(dto.getUsername());
         applyProfileDetails(appUser, dto, true);
         appUser.setRole(dto.getRole() == null ? AppUserRole.USER : dto.getRole());
@@ -64,13 +54,20 @@ public class AppUserService {
                 .toList();
     }
 
-    public void deleteUser(Long id) {
-        appUserRepository.deleteById(id);
+    public void deleteUser(Long id, AppUser currentUser) {
+        AppUser targetUser = requireAppUser(id);
+        if (currentUser != null && id.equals(currentUser.getId())) {
+            throw ServiceErrors.badRequest("You cannot delete your own account");
+        }
+        if (targetUser.getRole() == AppUserRole.ADMIN && appUserRepository.countByRole(AppUserRole.ADMIN) <= 1) {
+            throw ServiceErrors.conflict("The last administrator cannot be deleted");
+        }
+        appUserRepository.delete(targetUser);
     }
 
     public AppUser updateAppUser(Long id, AppUserRequestDTO dto) {
         AppUser appUser = requireAppUser(id);
-        validateUniqueEmail(id, appUser, dto.getEmail());
+        validateUniqueEmail(id, dto.getEmail());
         updateBasicProfile(appUser, dto);
         applyProfileDetails(appUser, dto, true);
         return appUserRepository.save(appUser);
@@ -78,7 +75,7 @@ public class AppUserService {
 
     public AppUser updateAppUserAsAdmin(Long id, AppUserRequestDTO dto) {
         AppUser appUser = requireAppUser(id);
-        validateUniqueEmail(id, appUser, dto.getEmail());
+        validateUniqueEmail(id, dto.getEmail());
         updateBasicProfile(appUser, dto);
         applyProfileDetails(appUser, dto, false);
         applyAdminOverrides(appUser, dto);
@@ -96,15 +93,19 @@ public class AppUserService {
         }
     }
 
-    private void validateUniqueEmail(Long id, AppUser appUser, String email) {
-        if (email != null && !email.equals(appUser.getEmail()) && appUserRepository.existsByEmailAndIdNot(email, id)) {
+    private void validateUniqueEmail(Long id, String email) {
+        String normalizedEmail = UserInputNormalizer.normalizeEmail(email);
+        boolean exists = id == null
+                ? appUserRepository.existsByEmail(normalizedEmail)
+                : appUserRepository.existsByEmailAndIdNot(normalizedEmail, id);
+        if (exists) {
             throw ServiceErrors.conflict("Email already exists");
         }
     }
 
     private void updateBasicProfile(AppUser appUser, AppUserRequestDTO dto) {
         appUser.setUsername(dto.getUsername());
-        appUser.setEmail(dto.getEmail());
+        appUser.setEmail(UserInputNormalizer.normalizeEmail(dto.getEmail()));
     }
 
     private void applyAdminOverrides(AppUser appUser, AppUserRequestDTO dto) {
@@ -119,41 +120,11 @@ public class AppUserService {
 
     private void applyProfileDetails(AppUser appUser, AppUserRequestDTO dto, boolean overwriteExisting) {
         if (overwriteExisting || dto.getProfileDescription() != null) {
-            appUser.setProfileDescription(normalizeProfileText(dto.getProfileDescription()));
+            appUser.setProfileDescription(ProfileValueNormalizer.normalizeText(dto.getProfileDescription()));
         }
 
         if (overwriteExisting || dto.getProfileAvatarDataUrl() != null) {
-            appUser.setProfileAvatarDataUrl(normalizeProfileAvatarDataUrl(dto.getProfileAvatarDataUrl()));
+            appUser.setProfileAvatarDataUrl(ProfileValueNormalizer.normalizeAvatarDataUrl(dto.getProfileAvatarDataUrl()));
         }
-    }
-
-    private String normalizeProfileText(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String normalized = value.trim();
-        return normalized.isEmpty() ? null : normalized;
-    }
-
-    private String normalizeProfileAvatarDataUrl(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String normalized = value.trim();
-        if (normalized.isEmpty()) {
-            return null;
-        }
-
-        if (!normalized.startsWith("data:image/")) {
-            throw ServiceErrors.badRequest("Profile avatar must be an image data URL");
-        }
-
-        if (normalized.length() > MAX_PROFILE_AVATAR_DATA_URL_LENGTH) {
-            throw ServiceErrors.badRequest("Profile avatar is too large");
-        }
-
-        return normalized;
     }
 }

@@ -9,20 +9,18 @@ import com.sidequest.sidequest.repository.QuestNewsRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.time.Instant;
 
 @Service
+@RequiredArgsConstructor
 public class QuestNewsService {
 
     private static final int DEFAULT_LIMIT = 8;
 
     private final QuestNewsRepository questNewsRepository;
-
-    public QuestNewsService(QuestNewsRepository questNewsRepository) {
-        this.questNewsRepository = questNewsRepository;
-    }
 
     public List<QuestNewsItem> getMyNews(AppUser currentUser) {
         return questNewsRepository.findByRecipientUserIdOrderByCreatedAtDesc(currentUser.getId(), PageRequest.of(0, DEFAULT_LIMIT));
@@ -55,6 +53,7 @@ public class QuestNewsService {
                 quest.getCreator(),
                 actor,
                 quest,
+                null,
                 application.getId(),
                 QuestNewsType.APPLICATION_CREATED,
                 "New application",
@@ -67,6 +66,7 @@ public class QuestNewsService {
                 quest.getCreator(),
                 actor,
                 quest,
+                null,
                 application.getId(),
                 QuestNewsType.APPLICATION_UPDATED,
                 "Application updated",
@@ -79,6 +79,7 @@ public class QuestNewsService {
                 quest.getCreator(),
                 actor,
                 quest,
+                null,
                 application.getId(),
                 QuestNewsType.APPLICATION_WITHDRAWN,
                 "Application withdrawn",
@@ -91,6 +92,7 @@ public class QuestNewsService {
                 application.getApplicant(),
                 actor,
                 quest,
+                null,
                 application.getId(),
                 QuestNewsType.APPLICATION_APPROVED,
                 "Application approved",
@@ -103,6 +105,7 @@ public class QuestNewsService {
                 application.getApplicant(),
                 actor,
                 quest,
+                null,
                 application.getId(),
                 QuestNewsType.APPLICATION_DECLINED,
                 "Application declined",
@@ -116,6 +119,7 @@ public class QuestNewsService {
                 actor,
                 quest,
                 null,
+                null,
                 QuestNewsType.QUEST_DELETED,
                 "Quest deleted",
                 "The quest \"" + quest.getTitle() + "\" was deleted."
@@ -123,20 +127,16 @@ public class QuestNewsService {
     }
 
     public void notifyCircleRequestAccepted(AppUser recipient, AppUser actor) {
-        if (recipient == null || actor == null) {
-            return;
-        }
-
-        QuestNewsItem item = new QuestNewsItem();
-        item.setRecipientUserId(recipient.getId());
-        item.setActorUserId(actor.getId());
-        item.setActorUsername(actor.getUsername());
-        item.setType(QuestNewsType.CIRCLE_REQUEST_ACCEPTED);
-        item.setTitle("Circle request accepted");
-        item.setMessage(actor.getUsername() + " accepted your circle request.");
-        item.setQuestId(null);
-        item.setQuestTitle("Circles");
-        questNewsRepository.save(item);
+        storeItem(
+                recipient,
+                actor,
+                null,
+                "Circles",
+                null,
+                QuestNewsType.CIRCLE_REQUEST_ACCEPTED,
+                "Circle request accepted",
+                actor == null ? null : actor.getUsername() + " accepted your circle request."
+        );
     }
 
     public void notifyQuestEvent(
@@ -148,13 +148,14 @@ public class QuestNewsService {
             String title,
             String message
     ) {
-        storeItem(recipient, actor, quest, applicationId, type, title, message);
+        storeItem(recipient, actor, quest, null, applicationId, type, title, message);
     }
 
     private void storeItem(
             AppUser recipient,
             AppUser actor,
             Quest quest,
+            String questTitleOverride,
             Long applicationId,
             QuestNewsType type,
             String title,
@@ -169,7 +170,7 @@ public class QuestNewsService {
         item.setActorUserId(actor.getId());
         item.setActorUsername(actor.getUsername());
         item.setQuestId(quest == null ? null : quest.getId());
-        item.setQuestTitle(quest == null ? null : quest.getTitle());
+        item.setQuestTitle(questTitleOverride != null ? questTitleOverride : quest == null ? null : quest.getTitle());
         item.setApplicationId(applicationId);
         item.setType(type);
         item.setTitle(title);

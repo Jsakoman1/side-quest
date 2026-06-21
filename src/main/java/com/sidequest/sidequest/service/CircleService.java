@@ -4,47 +4,67 @@ import com.sidequest.sidequest.dto.CircleRequestCreateDTO;
 import com.sidequest.sidequest.dto.CircleBlockCreateDTO;
 import com.sidequest.sidequest.dto.CircleRelationDTO;
 import com.sidequest.sidequest.dto.CircleRelationStatus;
+import com.sidequest.sidequest.dto.CircleOverviewDTO;
+import com.sidequest.sidequest.dto.CircleContactDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
 import com.sidequest.sidequest.mapper.CircleRequestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.CircleRequest;
-import com.sidequest.sidequest.model.Quest;
-import com.sidequest.sidequest.model.QuestAudience;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.CircleRequestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
 
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class CircleService {
     private final CircleRequestRepository circleRequestRepository;
     private final AppUserRepository appUserRepository;
     private final CircleRequestMgr circleRequestMgr;
     private final QuestNewsService questNewsService;
 
-    public CircleService(
-            CircleRequestRepository circleRequestRepository,
-            AppUserRepository appUserRepository,
-            CircleRequestMgr circleRequestMgr,
-            QuestNewsService questNewsService
-    ) {
-        this.circleRequestRepository = circleRequestRepository;
-        this.appUserRepository = appUserRepository;
-        this.circleRequestMgr = circleRequestMgr;
-        this.questNewsService = questNewsService;
-    }
-
     public List<CircleRequestResponseDTO> getMyCircles(AppUser currentUser) {
         return circleRequestRepository.findAcceptedByUserId(currentUser.getId())
                 .stream()
                 .map(circleRequestMgr::toDto)
                 .toList();
+    }
+
+    public CircleOverviewDTO getOverview(AppUser currentUser) {
+        return CircleOverviewDTO.builder()
+                .circles(getCircleContacts(currentUser))
+                .incomingRequests(getIncomingRequests(currentUser))
+                .outgoingRequests(getOutgoingRequests(currentUser))
+                .inviteCandidates(getInviteCandidates(currentUser))
+                .build();
+    }
+
+    private List<CircleContactDTO> getCircleContacts(AppUser currentUser) {
+        return circleRequestRepository.findAcceptedByUserId(currentUser.getId()).stream()
+                .map(relation -> toContact(currentUser, relation))
+                .toList();
+    }
+
+    private CircleContactDTO toContact(AppUser currentUser, CircleRequest relation) {
+        AppUser contact = relation.getRequester().getId().equals(currentUser.getId())
+                ? relation.getRecipient()
+                : relation.getRequester();
+
+        return CircleContactDTO.builder()
+                .relationId(relation.getId())
+                .userId(contact.getId())
+                .username(contact.getUsername())
+                .profileDescription(contact.getProfileDescription())
+                .profileAvatarDataUrl(contact.getProfileAvatarDataUrl())
+                .build();
     }
 
     public List<CircleRequestResponseDTO> getIncomingRequests(AppUser currentUser) {
@@ -62,7 +82,13 @@ public class CircleService {
     }
 
     public List<CircleSearchResultDTO> getInviteCandidates(AppUser currentUser) {
-        return List.of();
+        return appUserRepository.findAll().stream()
+                .filter(candidate -> !candidate.getId().equals(currentUser.getId()))
+                .map(candidate -> toSearchResult(currentUser, candidate))
+                .filter(candidate -> candidate.getRelationStatus() == CircleRelationStatus.NONE)
+                .sorted(Comparator.comparing(CircleSearchResultDTO::getUsername, String.CASE_INSENSITIVE_ORDER))
+                .limit(12)
+                .toList();
     }
 
     public CircleRelationDTO getRelationWithUser(AppUser currentUser, Long otherUserId) {
@@ -74,14 +100,15 @@ public class CircleService {
         }
 
         AppUser otherUser = requireAppUser(otherUserId);
+        Optional<CircleRequest> relation = findRelation(currentUser, otherUser);
         return CircleRelationDTO.builder()
-                .relationStatus(resolveRelationStatus(currentUser, otherUser))
-                .blockedByCurrentUser(isBlockedByCurrentUser(currentUser, otherUser))
+                .relationStatus(resolveRelationStatus(relation, currentUser.getId()))
+                .blockedByCurrentUser(isBlockedByCurrentUser(relation, currentUser.getId()))
                 .build();
     }
 
     public List<CircleSearchResultDTO> searchCircleUsers(AppUser currentUser, String query) {
-        String normalizedQuery = query == null ? "" : query.trim().replaceFirst("^@+", "");
+        String normalizedQuery = SearchQueryNormalizer.normalize(query);
 
         if (normalizedQuery.length() < 2) {
             return List.of();
@@ -98,16 +125,11 @@ public class CircleService {
 
     @Transactional
     public CircleRequestResponseDTO createCircleRequest(CircleRequestCreateDTO dto, AppUser currentUser) {
-        if (dto.getRecipientId() == null) {
-            throw ServiceErrors.badRequest("Recipient is required");
-        }
+        Long recipientId = requireTargetUserId(dto.getRecipientId(), "Recipient is required");
+        validateNotSelfAction(currentUser, recipientId, "You cannot send a circle request to yourself");
 
-        if (currentUser.getId().equals(dto.getRecipientId())) {
-            throw ServiceErrors.badRequest("You cannot send a circle request to yourself");
-        }
-
-        AppUser recipient = requireAppUser(dto.getRecipientId());
-        CircleRequest existingRelation = circleRequestRepository.findBetweenUsers(currentUser.getId(), recipient.getId()).orElse(null);
+        AppUser recipient = requireAppUser(recipientId);
+        CircleRequest existingRelation = findRelation(currentUser, recipient).orElse(null);
         if (existingRelation != null && existingRelation.getBlockedAt() != null) {
             throw ServiceErrors.conflict("This user is blocked");
         }
@@ -140,16 +162,11 @@ public class CircleService {
 
     @Transactional
     public CircleRequestResponseDTO blockCircleUser(CircleBlockCreateDTO dto, AppUser currentUser) {
-        if (dto.getBlockedUserId() == null) {
-            throw ServiceErrors.badRequest("Blocked user is required");
-        }
+        Long blockedUserId = requireTargetUserId(dto.getBlockedUserId(), "Blocked user is required");
+        validateNotSelfAction(currentUser, blockedUserId, "You cannot block yourself");
 
-        if (currentUser.getId().equals(dto.getBlockedUserId())) {
-            throw ServiceErrors.badRequest("You cannot block yourself");
-        }
-
-        AppUser blockedUser = requireAppUser(dto.getBlockedUserId());
-        CircleRequest existingRelation = circleRequestRepository.findBetweenUsers(currentUser.getId(), blockedUser.getId()).orElse(null);
+        AppUser blockedUser = requireAppUser(blockedUserId);
+        CircleRequest existingRelation = findRelation(currentUser, blockedUser).orElse(null);
         if (existingRelation != null && existingRelation.getBlockedAt() != null) {
             if (existingRelation.getBlockedBy() != null && Objects.equals(existingRelation.getBlockedBy().getId(), currentUser.getId())) {
                 throw ServiceErrors.conflict("This user is already blocked");
@@ -174,16 +191,11 @@ public class CircleService {
 
     @Transactional
     public void unblockCircleUser(Long blockedUserId, AppUser currentUser) {
-        if (blockedUserId == null) {
-            throw ServiceErrors.badRequest("Blocked user is required");
-        }
+        Long targetUserId = requireTargetUserId(blockedUserId, "Blocked user is required");
+        validateNotSelfAction(currentUser, targetUserId, "You cannot unblock yourself");
 
-        if (currentUser.getId().equals(blockedUserId)) {
-            throw ServiceErrors.badRequest("You cannot unblock yourself");
-        }
-
-        AppUser blockedUser = requireAppUser(blockedUserId);
-        CircleRequest circleRequest = circleRequestRepository.findBetweenUsers(currentUser.getId(), blockedUser.getId())
+        AppUser blockedUser = requireAppUser(targetUserId);
+        CircleRequest circleRequest = findRelation(currentUser, blockedUser)
                 .orElseThrow(() -> ServiceErrors.notFound("Blocked user not found"));
 
         if (circleRequest.getBlockedAt() == null) {
@@ -205,22 +217,6 @@ public class CircleService {
         return circleRequestRepository.findBetweenUsers(leftUser.getId(), rightUser.getId())
                 .map(circleRequest -> circleRequest.getAcceptedAt() != null)
                 .orElse(false);
-    }
-
-    public boolean canViewQuest(AppUser currentUser, Quest quest) {
-        if (currentUser == null || quest == null) {
-            return false;
-        }
-
-        if (isAdmin(currentUser) || quest.getCreator().getId().equals(currentUser.getId())) {
-            return true;
-        }
-
-        if (quest.getAudience() == QuestAudience.EVERYONE) {
-            return true;
-        }
-
-        return isCircleBetween(currentUser, quest.getCreator());
     }
 
     private CircleRequest requireIncomingRequest(Long requestId, AppUser currentUser) {
@@ -245,6 +241,10 @@ public class CircleService {
             throw ServiceErrors.forbidden("You can only manage your own circle requests");
         }
 
+        if (circleRequest.getBlockedAt() != null) {
+            throw ServiceErrors.forbidden("Blocked relationships must be managed through the unblock action");
+        }
+
         return circleRequest;
     }
 
@@ -258,21 +258,39 @@ public class CircleService {
                 .orElseThrow(() -> ServiceErrors.notFound("AppUser not found with id " + userId));
     }
 
+    private Long requireTargetUserId(Long targetUserId, String message) {
+        if (targetUserId == null) {
+            throw ServiceErrors.badRequest(message);
+        }
+
+        return targetUserId;
+    }
+
+    private void validateNotSelfAction(AppUser currentUser, Long targetUserId, String message) {
+        if (currentUser.getId().equals(targetUserId)) {
+            throw ServiceErrors.badRequest(message);
+        }
+    }
+
+    private Optional<CircleRequest> findRelation(AppUser leftUser, AppUser rightUser) {
+        return circleRequestRepository.findBetweenUsers(leftUser.getId(), rightUser.getId());
+    }
+
     private CircleSearchResultDTO toSearchResult(AppUser currentUser, AppUser candidate) {
-        CircleRelationStatus relationStatus = resolveRelationStatus(currentUser, candidate);
+        Optional<CircleRequest> relation = findRelation(currentUser, candidate);
         return CircleSearchResultDTO.builder()
                 .id(candidate.getId())
                 .username(candidate.getUsername())
                 .profileDescription(candidate.getProfileDescription())
                 .profileAvatarDataUrl(candidate.getProfileAvatarDataUrl())
                 .email(candidate.getEmail())
-                .relationStatus(relationStatus)
-                .blockedByCurrentUser(isBlockedByCurrentUser(currentUser, candidate))
+                .relationStatus(resolveRelationStatus(relation, currentUser.getId()))
+                .blockedByCurrentUser(isBlockedByCurrentUser(relation, currentUser.getId()))
                 .build();
     }
 
-    private CircleRelationStatus resolveRelationStatus(AppUser currentUser, AppUser candidate) {
-        return circleRequestRepository.findBetweenUsers(currentUser.getId(), candidate.getId())
+    private CircleRelationStatus resolveRelationStatus(Optional<CircleRequest> relation, Long currentUserId) {
+        return relation
                 .map(circleRequest -> {
                     if (circleRequest.getBlockedAt() != null) {
                         return CircleRelationStatus.BLOCKED;
@@ -282,7 +300,7 @@ public class CircleService {
                         return CircleRelationStatus.CIRCLE;
                     }
 
-                    if (Objects.equals(circleRequest.getRequester().getId(), currentUser.getId())) {
+                    if (Objects.equals(circleRequest.getRequester().getId(), currentUserId)) {
                         return CircleRelationStatus.OUTGOING_REQUEST;
                     }
 
@@ -291,15 +309,11 @@ public class CircleService {
                 .orElse(CircleRelationStatus.NONE);
     }
 
-    private boolean isBlockedByCurrentUser(AppUser currentUser, AppUser candidate) {
-        return circleRequestRepository.findBetweenUsers(currentUser.getId(), candidate.getId())
+    private boolean isBlockedByCurrentUser(Optional<CircleRequest> relation, Long currentUserId) {
+        return relation
                 .map(circleRequest -> circleRequest.getBlockedAt() != null
                         && circleRequest.getBlockedBy() != null
-                        && Objects.equals(circleRequest.getBlockedBy().getId(), currentUser.getId()))
+                        && Objects.equals(circleRequest.getBlockedBy().getId(), currentUserId))
                 .orElse(false);
-    }
-
-    private boolean isAdmin(AppUser user) {
-        return user != null && user.getRole() != null && "ADMIN".equals(user.getRole().name());
     }
 }

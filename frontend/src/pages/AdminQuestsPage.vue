@@ -5,6 +5,8 @@ import AdminShellHeader from "../components/admin/AdminShellHeader.vue"
 import DashboardAdmin from "../components/dashboard/DashboardAdmin.vue"
 import DashboardApplicationDialog from "../components/dashboard/DashboardApplicationDialog.vue"
 import DashboardQuestDialog from "../components/dashboard/DashboardQuestDialog.vue"
+import UiRequestError from "../components/ui/UiRequestError.vue"
+import UiToast from "../components/ui/UiToast.vue"
 import {logoutUser} from "../auth.ts"
 import {useQuestDashboard} from "../composables/useQuestDashboard.ts"
 
@@ -31,41 +33,10 @@ onMounted(() => {
           :on-logout="handleLogout"
         />
 
-        <Transition name="toast">
-          <div v-if="dashboard.feedback" :class="['dashboard-toast', dashboard.feedbackType === 'error' ? 'dashboard-toast--error' : 'dashboard-toast--success']">
-            {{ dashboard.feedback }}
-          </div>
-        </Transition>
+        <UiToast :message="dashboard.feedback" :tone="dashboard.feedbackType" />
 
-        <div v-if="dashboard.questsError" class="alert alert--error">
-          <div>{{ dashboard.questsError }}</div>
-          <details class="debug-details mt-2">
-            <summary class="debug-summary">Quest request debug details</summary>
-            <ul class="debug-list">
-              <li v-for="line in dashboard.questsErrorDetails" :key="line">{{ line }}</li>
-            </ul>
-            <div class="button-row mt-3">
-              <button class="button button--secondary debug-copy" type="button" @click="dashboard.copyDebugInfo(dashboard.questsErrorDetails)">
-                {{ dashboard.copiedDebug ? "Copied" : "Copy debug info" }}
-              </button>
-            </div>
-          </details>
-        </div>
-
-        <div v-if="dashboard.applicationsError" class="alert alert--error">
-          <div>{{ dashboard.applicationsError }}</div>
-          <details class="debug-details mt-2">
-            <summary class="debug-summary">Application request debug details</summary>
-            <ul class="debug-list">
-              <li v-for="line in dashboard.applicationsErrorDetails" :key="line">{{ line }}</li>
-            </ul>
-            <div class="button-row mt-3">
-              <button class="button button--secondary debug-copy" type="button" @click="dashboard.copyDebugInfo(dashboard.applicationsErrorDetails)">
-                {{ dashboard.copiedDebug ? "Copied" : "Copy debug info" }}
-              </button>
-            </div>
-          </details>
-        </div>
+        <UiRequestError :message="dashboard.questsError" :details="dashboard.questsErrorDetails" summary="Quest request debug details" :copied="dashboard.copiedDebug" @copy="dashboard.copyDebugInfo(dashboard.questsErrorDetails)" />
+        <UiRequestError :message="dashboard.applicationsError" :details="dashboard.applicationsErrorDetails" summary="Application request debug details" :copied="dashboard.copiedDebug" @copy="dashboard.copyDebugInfo(dashboard.applicationsErrorDetails)" />
 
         <div v-if="dashboard.isLoadingQuests || dashboard.isLoadingApplications" class="empty-state">
           <div v-if="dashboard.isLoadingQuests">Loading quests...</div>

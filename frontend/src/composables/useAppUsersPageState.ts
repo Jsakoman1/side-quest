@@ -1,13 +1,15 @@
-import {ref} from "vue"
+import {computed, ref} from "vue"
 import type {AppUser} from "../api/sidequestApi.ts"
 import {appUserRoleOptions, type AppUserRole} from "../shared/sidequestDomain.ts"
+import {useTimedBanner} from "./useTimedBanner.ts"
 
 export const useAppUsersPageState = () => {
   const appUsers = ref<AppUser[]>([])
   const isLoadingUsers = ref(false)
   const pageError = ref("")
   const pageErrorDetails = ref<string[]>([])
-  const copiedDebug = ref(false)
+  const copiedDebugBanner = useTimedBanner(1500)
+  const copiedDebug = computed(() => !!copiedDebugBanner.message.value)
   const feedback = ref("")
   const feedbackType = ref<"error" | "success">("success")
   const isCreateUserDialogOpen = ref(false)
@@ -26,6 +28,10 @@ export const useAppUsersPageState = () => {
   const showFeedback = (message: string, type: "error" | "success") => {
     feedback.value = message
     feedbackType.value = type
+  }
+
+  const showCopiedDebug = () => {
+    copiedDebugBanner.show("Copied")
   }
 
   const openCreateUserDialog = () => {
@@ -55,6 +61,7 @@ export const useAppUsersPageState = () => {
     editAppUserUsername,
     editAppUserRole,
     editAppUserPassword,
+    showCopiedDebug,
     showFeedback,
     openCreateUserDialog,
     closeCreateUserDialog

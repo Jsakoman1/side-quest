@@ -4,19 +4,23 @@ import {RouterLink, useRouter} from "vue-router"
 import DashboardSidebar from "../components/dashboard/DashboardSidebar.vue"
 import DashboardSectionHeader from "../components/dashboard/DashboardSectionHeader.vue"
 import DashboardNews from "../components/dashboard/DashboardNews.vue"
-import RichTextEditor from "../components/editor/RichTextEditor.vue"
+import DashboardProfileDialog from "../components/dashboard/DashboardProfileDialog.vue"
+import CircleCandidateCard from "../components/circles/CircleCandidateCard.vue"
 import ProfileAvatar from "../components/profile/ProfileAvatar.vue"
 import ProfileBio from "../components/profile/ProfileBio.vue"
 import UiDialog from "../components/ui/UiDialog.vue"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
-import {currentUser, logoutUser} from "../auth.ts"
-import {sidequestApi, type CircleCandidate, type CircleRequest} from "../api/sidequestApi.ts"
+import {logoutUser} from "../auth.ts"
+import {sidequestApi, type CircleCandidate, type CircleContact, type CircleRequest} from "../api/sidequestApi.ts"
 import {useQuestDashboard} from "../composables/useQuestDashboard.ts"
+import {useTimedBanner} from "../composables/useTimedBanner.ts"
+import {hasSearchQuery, normalizeSearchQuery} from "../lib/searchQuery.ts"
 
 const router = useRouter()
 const dashboard = useQuestDashboard()
+const inviteCandidates = ref<CircleCandidate[]>([])
 const searchResults = ref<CircleCandidate[]>([])
-const circles = ref<CircleRequest[]>([])
+const circles = ref<CircleContact[]>([])
 const incomingRequests = ref<CircleRequest[]>([])
 const outgoingRequests = ref<CircleRequest[]>([])
 const searchQuery = ref("")
@@ -25,48 +29,22 @@ const isLoading = ref(false)
 const isSearching = ref(false)
 const isSaving = ref(false)
 const error = ref("")
-const message = ref("")
-const messageTone = ref<"success" | "warning">("success")
+const circleBanner = useTimedBanner(4000)
+const message = circleBanner.message
+const messageTone = circleBanner.tone
 
-const currentUserId = computed(() => currentUser.value?.id ?? null)
 const filterOptions = [
   {value: "all", label: "All"},
   {value: "circles", label: "Circles"},
   {value: "incoming", label: "Incoming"},
   {value: "outgoing", label: "Outgoing"}
 ] as const
-const normalizedSearchQuery = computed(() => searchQuery.value.trim().replace(/^@+/, "").toLowerCase())
-const searchHasQuery = computed(() => normalizedSearchQuery.value.length >= 2)
+const normalizedSearchQuery = computed(() => normalizeSearchQuery(searchQuery.value).toLowerCase())
+const searchHasQuery = computed(() => hasSearchQuery(searchQuery.value))
 let searchTimeout: number | undefined
 
 const showMessage = (text: string, tone: "success" | "warning" = "success") => {
-  message.value = text
-  messageTone.value = tone
-  window.setTimeout(() => {
-    if (message.value === text) {
-      message.value = ""
-    }
-  }, 4000)
-}
-
-const relationStatusLabel = (status: CircleCandidate["relationStatus"]) => {
-  if (status === "CIRCLE") {
-    return "In circles"
-  }
-
-  if (status === "INCOMING_REQUEST") {
-    return "Incoming invite"
-  }
-
-  if (status === "OUTGOING_REQUEST") {
-    return "Invite sent"
-  }
-
-  if (status === "BLOCKED") {
-    return "Blocked"
-  }
-
-  return "Available"
+  circleBanner.show(text, tone)
 }
 
 const loadCircles = async () => {
@@ -74,15 +52,11 @@ const loadCircles = async () => {
   error.value = ""
 
   try {
-    const [acceptedCircles, incoming, outgoing] = await Promise.all([
-      sidequestApi.getMyCircles(),
-      sidequestApi.getIncomingCircleRequests(),
-      sidequestApi.getOutgoingCircleRequests()
-    ])
-
-    circles.value = acceptedCircles
-    incomingRequests.value = incoming
-    outgoingRequests.value = outgoing
+    const overview = await sidequestApi.getCircleOverview()
+    circles.value = overview.circles
+    incomingRequests.value = overview.incomingRequests
+    outgoingRequests.value = overview.outgoingRequests
+    inviteCandidates.value = overview.inviteCandidates
   } catch {
     error.value = "Could not load circles."
   } finally {
@@ -91,7 +65,7 @@ const loadCircles = async () => {
 }
 
 const loadSearchResults = async (query: string) => {
-  const trimmedQuery = query.trim().replace(/^@+/, "")
+  const trimmedQuery = normalizeSearchQuery(query)
   if (trimmedQuery.length < 2) {
     searchResults.value = []
     return
@@ -132,12 +106,7 @@ const visibleCircles = computed(() => {
   }
 
   return circles.value.filter((circle) => {
-    const user = otherUser(circle)
-    return [user?.username, user?.profileDescription, user?.email]
-      .filter((value): value is string => !!value)
-      .join(" ")
-      .toLowerCase()
-      .includes(normalizedSearchQuery.value)
+    return matchesSearch([circle.username, circle.profileDescription])
   })
 })
 
@@ -156,34 +125,6 @@ const visibleOutgoingRequests = computed(() => {
 
   return outgoingRequests.value.filter((request) => matchesSearch([request.recipientUsername, request.recipientProfileDescription]))
 })
-
-const otherUserId = (circle: CircleRequest) => {
-  if (currentUserId.value === circle.requesterId) {
-    return circle.recipientId
-  }
-
-  return circle.requesterId
-}
-
-const otherUser = (circle: CircleRequest) => {
-  if (currentUserId.value === circle.requesterId) {
-    return {
-      id: circle.recipientId,
-      username: circle.recipientUsername,
-      profileDescription: circle.recipientProfileDescription,
-      profileAvatarDataUrl: circle.recipientProfileAvatarDataUrl,
-      email: circle.recipientUsername
-    }
-  }
-
-  return {
-    id: circle.requesterId,
-    username: circle.requesterUsername,
-    profileDescription: circle.requesterProfileDescription,
-    profileAvatarDataUrl: circle.requesterProfileAvatarDataUrl,
-    email: circle.requesterUsername
-  }
-}
 
 const sendRequest = async (id: number) => {
   if (!Number.isFinite(id)) {
@@ -343,72 +284,39 @@ const handleLogout = () => {
           <div v-else-if="error" class="alert alert--error">{{ error }}</div>
 
           <div v-else class="stack">
+            <section v-if="!searchHasQuery && inviteCandidates.length" class="card circles-section">
+              <div class="card__header u-row-between u-items-start u-gap-12">
+                <div>
+                  <h2 class="card__title">Suggested people</h2>
+                  <p class="muted mt-2 mb-0">Users you can invite right away.</p>
+                </div>
+              </div>
+
+              <div class="stack mt-4">
+                <CircleCandidateCard
+                  v-for="user in inviteCandidates"
+                  :key="user.id"
+                  :user="user"
+                  :saving="isSaving"
+                  @invite="sendRequest"
+                  @block="blockUser"
+                  @unblock="unblockUser"
+                />
+              </div>
+            </section>
+
             <div v-if="searchHasQuery" class="stack">
               <div v-if="isSearching" class="empty-state">Searching...</div>
               <div v-else-if="searchResults.length" class="stack">
-                <article v-for="user in searchResults" :key="user.id" class="profile-open-quest">
-                  <div class="profile-open-quest__top">
-                    <RouterLink class="profile-link" :to="`/users/${user.id}`">
-                      <ProfileAvatar
-                        :username="user.username"
-                        :avatar-data-url="user.profileAvatarDataUrl"
-                        :size="56"
-                      />
-                      <div class="stack">
-                        <strong>{{ user.username }}</strong>
-                        <div class="muted">{{ user.email }}</div>
-                      </div>
-                    </RouterLink>
-                    <span
-                      class="badge"
-                      :class="{
-                        'badge--accent': user.relationStatus === 'NONE',
-                        'badge--warning': user.relationStatus === 'OUTGOING_REQUEST' || user.relationStatus === 'INCOMING_REQUEST',
-                        'badge--danger': user.relationStatus === 'BLOCKED'
-                      }"
-                    >
-                      {{ relationStatusLabel(user.relationStatus) }}
-                    </span>
-                  </div>
-                  <ProfileBio :text="user.profileDescription" placeholder="No profile description." />
-                  <div class="button-row mt-3">
-                    <button
-                      v-if="user.relationStatus === 'NONE'"
-                      class="button"
-                      type="button"
-                      :disabled="isSaving"
-                      @click="sendRequest(user.id)"
-                    >
-                      Send invite
-                    </button>
-                    <button
-                      v-if="user.relationStatus === 'BLOCKED' && user.blockedByCurrentUser"
-                      class="button button--secondary"
-                      type="button"
-                      :disabled="isSaving"
-                      @click="unblockUser(user.id)"
-                    >
-                      Unblock
-                    </button>
-                    <button
-                      v-else-if="user.relationStatus === 'BLOCKED'"
-                      class="button button--secondary"
-                      type="button"
-                      disabled
-                    >
-                      Blocked by them
-                    </button>
-                    <button
-                      v-else
-                      class="button button--secondary"
-                      type="button"
-                      :disabled="isSaving"
-                      @click="blockUser(user.id)"
-                    >
-                      Block
-                    </button>
-                  </div>
-                </article>
+                <CircleCandidateCard
+                  v-for="user in searchResults"
+                  :key="user.id"
+                  :user="user"
+                  :saving="isSaving"
+                  @invite="sendRequest"
+                  @block="blockUser"
+                  @unblock="unblockUser"
+                />
               </div>
               <div v-else class="empty-state">
                 No people match your search.
@@ -417,7 +325,7 @@ const handleLogout = () => {
 
             <div class="grid grid--three circles-grid">
               <section class="card circles-section">
-                <div class="card__header">
+                <div class="card__header u-row-between u-items-start u-gap-12">
                   <div>
                     <h2 class="card__title">My circles</h2>
                     <p class="muted mt-2 mb-0">People you already trust for work.</p>
@@ -425,26 +333,26 @@ const handleLogout = () => {
                 </div>
 
                 <div v-if="visibleCircles.length" class="stack mt-4">
-                  <article v-for="circle in visibleCircles" :key="circle.id" class="profile-open-quest">
+                  <article v-for="circle in visibleCircles" :key="circle.relationId" class="profile-open-quest">
                     <div class="profile-open-quest__top">
-                      <RouterLink class="profile-link" :to="`/users/${otherUser(circle)?.id}`">
+                      <RouterLink class="profile-link" :to="`/users/${circle.userId}`">
                         <ProfileAvatar
-                          :username="otherUser(circle)?.username"
-                          :avatar-data-url="otherUser(circle)?.profileAvatarDataUrl"
+                          :username="circle.username"
+                          :avatar-data-url="circle.profileAvatarDataUrl"
                           :size="48"
                         />
                         <div class="stack">
-                          <strong>{{ otherUser(circle)?.username }}</strong>
+                          <strong>{{ circle.username }}</strong>
                         </div>
                       </RouterLink>
                       <span class="badge badge--accent">Circle</span>
                     </div>
-                    <ProfileBio :text="otherUser(circle)?.profileDescription" placeholder="No profile description." />
+                    <ProfileBio :text="circle.profileDescription" placeholder="No profile description." />
                     <div class="button-row mt-3">
-                      <button class="button button--secondary" type="button" :disabled="isSaving" @click="removeRequest(circle.id, 'warning')">
+                      <button class="button button--secondary" type="button" :disabled="isSaving" @click="removeRequest(circle.relationId, 'warning')">
                         Remove
                       </button>
-                      <button class="button button--secondary" type="button" :disabled="isSaving" @click="blockUser(otherUserId(circle))">
+                      <button class="button button--secondary" type="button" :disabled="isSaving" @click="blockUser(circle.userId)">
                         Block
                       </button>
                     </div>
@@ -457,7 +365,7 @@ const handleLogout = () => {
               </section>
 
               <section class="card circles-section">
-                <div class="card__header">
+                <div class="card__header u-row-between u-items-start u-gap-12">
                   <div>
                     <h2 class="card__title">Incoming requests</h2>
                     <p class="muted mt-2 mb-0">Requests waiting for your reply.</p>
@@ -501,7 +409,7 @@ const handleLogout = () => {
               </section>
 
               <section class="card circles-section">
-                <div class="card__header">
+                <div class="card__header u-row-between u-items-start u-gap-12">
                   <div>
                     <h2 class="card__title">Outgoing requests</h2>
                     <p class="muted mt-2 mb-0">Invitations you already sent.</p>
@@ -544,64 +452,7 @@ const handleLogout = () => {
           </div>
         </section>
 
-        <UiDialog
-          :open="dashboard.isProfileEditDialogOpen"
-          title="Edit profile"
-          subtitle="Update your username, avatar, and profile description."
-          @close="dashboard.closeProfileEditDialog"
-        >
-          <form @submit.prevent="dashboard.saveProfile">
-            <div class="profile-editor">
-              <ProfileAvatar
-                :username="dashboard.currentUser?.username"
-                :avatar-data-url="dashboard.profileAvatarDataUrl"
-                :size="96"
-              />
-
-              <div class="profile-editor__content">
-                <div class="field dashboard-edit-field dashboard-edit-field--profile-email">
-                  <span class="label">Email</span>
-                  <strong>{{ dashboard.currentUser?.email }}</strong>
-                </div>
-
-                <label class="field dashboard-edit-field dashboard-edit-field--profile-username">
-                  <span class="label">Username</span>
-                  <input v-model="dashboard.profileUsername" class="input" />
-                </label>
-
-                <label class="field dashboard-edit-field">
-                  <span class="label">Profile image</span>
-                  <input
-                    class="input"
-                    type="file"
-                    accept="image/*"
-                    @change="dashboard.updateProfileAvatarFromFile(($event.target as HTMLInputElement).files?.[0] ?? null)"
-                  />
-                  <div class="button-row mt-2">
-                    <button class="button button--secondary" type="button" @click="dashboard.clearProfileAvatar">Remove image</button>
-                  </div>
-                </label>
-
-                <label class="field dashboard-edit-field dashboard-edit-field--profile-description">
-                  <span class="label">Profile description</span>
-                  <RichTextEditor
-                    v-model="dashboard.profileDescription"
-                    placeholder="Tell people what you do, how you work, and what they can expect."
-                    toolbar-label="Profile description tools"
-                  />
-                </label>
-
-                <div class="profile-editor__preview">
-                  <span class="label">Preview</span>
-                  <ProfileBio :text="dashboard.profileDescription" />
-                </div>
-              </div>
-            </div>
-            <div class="button-row mt-4">
-              <button class="button button--action" type="submit">Save changes</button>
-            </div>
-          </form>
-        </UiDialog>
+        <DashboardProfileDialog :dashboard="dashboard" />
 
         <UiDialog
           :open="dashboard.isNotificationsDialogOpen"

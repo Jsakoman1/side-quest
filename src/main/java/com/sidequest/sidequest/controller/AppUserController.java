@@ -50,8 +50,8 @@ public class AppUserController {
     }
 
     @DeleteMapping("/{id}")
-    public void deleteAppUser(@PathVariable long id) {
-        appUserService.deleteUser(id);
+    public void deleteAppUser(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
+        appUserService.deleteUser(id, currentUser);
     }
 
     @PutMapping("/{id}")

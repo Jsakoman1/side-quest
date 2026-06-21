@@ -1,5 +1,6 @@
 import {isAdmin} from "../auth.ts"
-import {API_BASE_URL, sidequestApi, type AppUser} from "../api/sidequestApi.ts"
+import {API_BASE_URL} from "../api/httpClient.ts"
+import {sidequestApi, type AppUser} from "../api/sidequestApi.ts"
 import {buildRequestDebugInfo, formatDebugInfo} from "../httpDebug.ts"
 import type {AppUsersPageState} from "./useAppUsersPageState.ts"
 
@@ -10,10 +11,7 @@ export const useAppUsersPageActions = (state: AppUsersPageState) => {
     }
 
     await navigator.clipboard.writeText(formatDebugInfo(state.pageErrorDetails.value))
-    state.copiedDebug.value = true
-    window.setTimeout(() => {
-      state.copiedDebug.value = false
-    }, 1500)
+    state.showCopiedDebug()
   }
 
   const fetchAppUsers = async () => {

@@ -21,7 +21,7 @@ defineEmits<{
       @click.self="$emit('close')"
     >
       <div :class="['dialog-panel card', { 'dialog-panel--drawer': position === 'drawer' }, size ? `dialog-panel--${size}` : '']">
-        <div v-if="title || subtitle || $slots.actions" class="card__header">
+        <div v-if="title || subtitle || $slots.actions" class="card__header u-row-between u-items-start u-gap-12">
           <div class="card__header-main">
             <span v-if="leading" class="card__header-leading">{{ leading }}</span>
             <h2 v-if="title" class="card__title card__title--dialog">{{ title }}</h2>

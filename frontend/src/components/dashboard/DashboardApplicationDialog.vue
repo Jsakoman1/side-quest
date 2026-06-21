@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, ref, watch} from "vue"
+import {computed, ref} from "vue"
 import {useRouter} from "vue-router"
 import UiDialog from "../ui/UiDialog.vue"
 import DashboardEditSheet from "./DashboardEditSheet.vue"
@@ -7,8 +7,9 @@ import UiStatusBanner from "../ui/UiStatusBanner.vue"
 import RichTextEditor from "../editor/RichTextEditor.vue"
 import ProfileBio from "../profile/ProfileBio.vue"
 import {richTextHasContent} from "../../shared/richText.ts"
-import {useTimedBanner} from "../../composables/useTimedBanner.ts"
+import {useDialogActionState} from "../../composables/useDialogActionState.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import {closeAfterDelay} from "../../lib/dialogFlow.ts"
 
 const props = defineProps<{
   dashboard: QuestDashboard
@@ -18,15 +19,12 @@ const router = useRouter()
 const application = computed(() => props.dashboard.selectedApplicationDialog)
 const isEditing = ref(false)
 const isWithdrawing = ref(false)
-const actionBanner = useTimedBanner()
-const actionMessage = actionBanner.message
-const actionMessageTone = actionBanner.tone
-
-watch(application, () => {
+const actionBanner = useDialogActionState(application, () => {
   isEditing.value = application.value?.status === "PENDING"
-  actionBanner.clear()
   isWithdrawing.value = false
 })
+const actionMessage = actionBanner.message
+const actionMessageTone = actionBanner.tone
 
 const canEdit = computed(() => application.value?.status === "PENDING")
 const quest = computed(() => (application.value ? props.dashboard.questForId(application.value.questId) : null))
@@ -52,10 +50,10 @@ const withdrawApplication = () => {
     }
 
     setActionMessage("Application withdrawn.")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       props.dashboard.closeApplicationDialog()
       isWithdrawing.value = false
-    }, 900)
+    })
   })()
 }
 </script>
@@ -75,7 +73,7 @@ const withdrawApplication = () => {
 
     <div v-if="application" class="stack dialog-sheet">
       <section class="dialog-focus-card dialog-focus-card--primary">
-        <div class="dialog-focus-card__top">
+        <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
           <span :class="['badge', props.dashboard.statusBadgeClass(application.status)]">
             {{ props.dashboard.formatApplicationStatus(application.status) }}
           </span>

@@ -2,11 +2,13 @@
 import {computed, ref, onMounted} from "vue"
 import {useQuestDetailPage} from "../composables/useQuestDetailPage.ts"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
+import UiRequestError from "../components/ui/UiRequestError.vue"
 import ProfileBio from "../components/profile/ProfileBio.vue"
 import {richTextHasContent} from "../shared/richText.ts"
 import {formatQuestTerm} from "../shared/questSchedule.ts"
 import {useTimedBanner} from "../composables/useTimedBanner.ts"
 import {formatApplicationStatus, formatQuestStatus, statusBadgeClass} from "../lib/questDashboardRules.ts"
+import {closeAfterDelay} from "../lib/dialogFlow.ts"
 
 const {
   router,
@@ -60,10 +62,10 @@ const handleDeleteQuest = () => {
     }
 
     setActionMessage("Quest deleted.")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       router.push("/quests")
       isActionInProgress.value = false
-    }, 900)
+    })
   })()
 }
 
@@ -79,9 +81,9 @@ const handleConfirmTermChange = () => {
     }
 
     setActionMessage("Quest term confirmed.")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       isActionInProgress.value = false
-    }, 900)
+    })
   })()
 }
 
@@ -97,9 +99,9 @@ const handleRejectTermChange = () => {
     }
 
     setActionMessage("Quest term change rejected.", "warning")
-    window.setTimeout(() => {
+    closeAfterDelay(() => {
       isActionInProgress.value = false
-    }, 900)
+    })
   })()
 }
 
@@ -108,7 +110,7 @@ onMounted(init)
 
 <template>
   <div class="page">
-    <div class="page-header">
+    <div class="page-header u-row-between u-items-end u-wrap u-gap-16">
       <div>
         <h1 class="page-title">Quest details</h1>
       </div>
@@ -122,20 +124,7 @@ onMounted(init)
 
     <UiStatusBanner :message="actionMessage" :tone="actionMessageTone" />
 
-    <div v-if="error" class="alert alert--error">
-      <div>{{ error }}</div>
-      <details class="debug-details mt-2">
-        <summary class="debug-summary">Debug details</summary>
-        <ul class="debug-list">
-          <li v-for="line in errorDetails" :key="line">{{ line }}</li>
-        </ul>
-        <div class="button-row mt-3">
-          <button class="button button--secondary debug-copy" type="button" @click="copyDebugInfo">
-            {{ copiedDebug ? "Copied" : "Copy debug info" }}
-          </button>
-        </div>
-      </details>
-    </div>
+    <UiRequestError :message="error" :details="errorDetails" summary="Debug details" :copied="copiedDebug" @copy="copyDebugInfo" />
 
     <div v-if="isLoading" class="empty-state">
       Loading quest...
@@ -143,14 +132,14 @@ onMounted(init)
     </div>
 
   <div v-if="quest" class="card">
-      <div class="card__header">
+      <div class="card__header u-row-between u-items-start u-gap-12">
         <div class="stack">
           <h2 class="card__title">{{ quest.title }}</h2>
         </div>
       </div>
 
       <div v-if="myApplication" class="dialog-focus-card dialog-focus-card--application">
-        <div class="dialog-focus-card__top">
+        <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
           <span :class="['badge', statusBadgeClass(myApplication.status)]">
             {{ formatApplicationStatus(myApplication.status) }}
           </span>
@@ -169,7 +158,7 @@ onMounted(init)
       </div>
 
       <div class="dialog-focus-card dialog-focus-card--primary">
-        <div class="dialog-focus-card__top">
+        <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
           <span :class="['badge', statusBadgeClass(quest.status)]">
             {{ formatQuestStatus(quest.status) }}
           </span>

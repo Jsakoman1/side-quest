@@ -6,6 +6,7 @@ import ProfileBio from "../components/profile/ProfileBio.vue"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
 import {currentUser, isAdmin} from "../auth.ts"
 import {sidequestApi, type AppUser, type CircleRelation, type CircleRequest} from "../api/sidequestApi.ts"
+import {useTimedBanner} from "../composables/useTimedBanner.ts"
 
 const route = useRoute()
 const router = useRouter()
@@ -16,10 +17,9 @@ const outgoingCircleRequests = ref<CircleRequest[]>([])
 const circleRelation = ref<CircleRelation | null>(null)
 const isLoading = ref(false)
 const error = ref("")
-const copied = ref(false)
-const circleRequestMessage = ref("")
-const circleRequestTone = ref<"success" | "warning">("success")
 const isSendingCircleRequest = ref(false)
+const copyBanner = useTimedBanner(1500)
+const circleBanner = useTimedBanner(3500)
 
 const userId = computed(() => Number(route.params.id))
 const currentUserId = computed(() => currentUser.value?.id ?? null)
@@ -62,6 +62,9 @@ const circleActionLabel = computed(() => {
   return "Send circle invite"
 })
 const profileLink = computed(() => `${window.location.origin}/users/${profile.value?.id ?? userId.value}`)
+const copied = computed(() => !!copyBanner.message.value)
+const circleRequestMessage = computed(() => circleBanner.message.value)
+const circleRequestTone = computed(() => circleBanner.tone.value)
 
 const copyProfileLink = async () => {
   if (!profile.value) {
@@ -69,20 +72,11 @@ const copyProfileLink = async () => {
   }
 
   await navigator.clipboard.writeText(profileLink.value)
-  copied.value = true
-  window.setTimeout(() => {
-    copied.value = false
-  }, 1500)
+  copyBanner.show("Link copied.")
 }
 
 const showCircleMessage = (message: string, tone: "success" | "warning" = "success") => {
-  circleRequestMessage.value = message
-  circleRequestTone.value = tone
-  window.setTimeout(() => {
-    if (circleRequestMessage.value === message) {
-      circleRequestMessage.value = ""
-    }
-  }, 3500)
+  circleBanner.show(message, tone)
 }
 
 const loadCircleRelations = async () => {
@@ -198,7 +192,7 @@ onMounted(() => {
 
 <template>
   <div class="page">
-    <div class="page-header">
+    <div class="page-header u-row-between u-items-end u-wrap u-gap-16">
       <div>
         <h1 class="page-title">Profile</h1>
         <p class="page-subtitle">Public profile card for quests and applications.</p>

@@ -1,17 +1,6 @@
-export type QuestNewsType =
-  | "APPLICATION_CREATED"
-  | "APPLICATION_UPDATED"
-  | "APPLICATION_WITHDRAWN"
-  | "APPLICATION_APPROVED"
-  | "APPLICATION_DECLINED"
-  | "QUEST_TERM_CONFIRMATION_REQUESTED"
-  | "QUEST_TERM_CONFIRMED"
-  | "QUEST_TERM_REJECTED"
-  | "QUEST_STARTED"
-  | "QUEST_COMPLETED"
-  | "QUEST_REOPENED"
-  | "QUEST_DELETED"
-  | "CIRCLE_REQUEST_ACCEPTED"
+import type {QuestNewsType} from "./sidequestDomain.ts"
+
+export type {QuestNewsType} from "./sidequestDomain.ts"
 
 const questNewsTypeLabels: Record<QuestNewsType, string> = {
   APPLICATION_CREATED: "New application",

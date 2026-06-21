@@ -3,29 +3,51 @@ import {computed, ref} from "vue"
 import DashboardQuestSummaryRow from "./DashboardQuestSummaryRow.vue"
 import DashboardSectionHeader from "./DashboardSectionHeader.vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import {type Quest} from "../../api/sidequestApi.ts"
+import type {QuestAudience} from "../../shared/sidequestDomain.ts"
+import {normalizeSearchQuery} from "../../lib/searchQuery.ts"
+import {buildQuestSearchParams} from "../../lib/questSearch.ts"
+import {useQuestSearchResults} from "../../composables/useQuestSearchResults.ts"
+import UiPagination from "../ui/UiPagination.vue"
 
 const props = defineProps<{
   dashboard: QuestDashboard
 }>()
 
 const questSearch = ref("")
+const audienceFilter = ref<QuestAudience | "ALL">("ALL")
+const dateFrom = ref("")
+const dateTo = ref("")
+const itemsPerPage = 8
+const {results: questResults, loadQuests, watchAndReload} = useQuestSearchResults(itemsPerPage, (page) => buildQuestSearchParams({
+  q: normalizeSearchQuery(questSearch.value),
+  status: props.dashboard.adminQuestStatusFilter === "ALL" ? null : props.dashboard.adminQuestStatusFilter,
+  audience: audienceFilter.value === "ALL" ? null : audienceFilter.value,
+  dateFrom: dateFrom.value || null,
+  dateTo: dateTo.value || null,
+  sort: "recommended",
+  page,
+  size: itemsPerPage
+}))
+const pagedQuests = computed(() => questResults.items.value)
+const totalItems = questResults.totalItems
+const totalPages = questResults.totalPages
+const currentPage = questResults.currentPage
+const isLoading = questResults.isLoading
+const pageStart = questResults.pageStart
+const pageEnd = questResults.pageEnd
+const hasPreviousPage = questResults.hasPreviousPage
+const hasNextPage = questResults.hasNextPage
 
-const filteredQuests = computed(() => {
-  const query = questSearch.value.trim().toLowerCase()
-  if (!query) {
-    return props.dashboard.filteredAdminQuests
-  }
+watchAndReload([questSearch, () => props.dashboard.adminQuestStatusFilter, audienceFilter, dateFrom, dateTo])
 
-  return props.dashboard.filteredAdminQuests.filter((quest) => {
-    return [
-      quest.title,
-      quest.description,
-      quest.creatorUsername,
-      props.dashboard.formatStatus(quest.status),
-      String(quest.awardAmount ?? "")
-    ].some((value) => value.toLowerCase().includes(query))
-  })
-})
+const previousPage = () => {
+  void questResults.previousPage(loadQuests)
+}
+
+const nextPage = () => {
+  void questResults.nextPage(loadQuests)
+}
 </script>
 
 <template>
@@ -64,19 +86,49 @@ const filteredQuests = computed(() => {
         </label>
       </div>
 
-      <div v-if="!filteredQuests.length" class="empty-state mt-4">
-        No quests in this group.
+      <div class="grid grid--three admin-toolbar admin-toolbar--filters">
+        <label class="field">
+          <span class="label">Audience</span>
+          <select v-model="audienceFilter" class="input">
+            <option value="ALL">All</option>
+            <option v-for="option in props.dashboard.questAudienceOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="label">From date</span>
+          <input v-model="dateFrom" class="input" type="date" />
+        </label>
+
+        <label class="field">
+          <span class="label">To date</span>
+          <input v-model="dateTo" class="input" type="date" />
+        </label>
       </div>
 
-      <div v-else class="quest-list mt-4">
-        <button
-          v-for="quest in filteredQuests"
-          :key="quest.id"
-          type="button"
-          class="compact-disclosure compact-disclosure--tight compact-disclosure--launch"
-          :class="[dashboard.statusSurfaceClass(quest.status), { 'ui-pulse': dashboard.successPulseTarget === `quest-${quest.id}` }]"
-          @click="dashboard.openQuestDialog(quest.id)"
-        >
+      <div v-if="isLoading" class="empty-state mt-4">
+        Loading quests...
+      </div>
+
+      <template v-else>
+        <div v-if="!pagedQuests.length" class="empty-state mt-4">
+          No quests in this group.
+        </div>
+
+        <template v-else>
+          <UiPagination class="mt-4" :label="`Showing ${pageStart}-${pageEnd} of ${totalItems}`" :has-previous="hasPreviousPage" :has-next="hasNextPage" @previous="previousPage" @next="nextPage" />
+
+          <div class="quest-list mt-4">
+            <button
+              v-for="quest in pagedQuests"
+              :key="quest.id"
+              type="button"
+              class="compact-disclosure compact-disclosure--tight compact-disclosure--launch"
+              :class="[dashboard.statusSurfaceClass(quest.status), { 'ui-pulse': dashboard.successPulseTarget === `quest-${quest.id}` }]"
+              @click="dashboard.openQuestDialog(quest.id)"
+              >
               <DashboardQuestSummaryRow
                 primary-label="Award"
                 :primary-value="quest.awardAmount"
@@ -92,10 +144,17 @@ const filteredQuests = computed(() => {
                   <span v-if="quest.reopenedAt && quest.status === 'OPEN'" class="badge badge--warning">Reopened</span>
                   <span v-if="quest.status === 'WAITING_CONFIRMATION'" class="badge badge--warning">Awaiting confirmation</span>
                   <span class="badge badge--accent">{{ quest.creatorUsername }}</span>
+                  <span class="badge badge--secondary">{{ quest.audience === "EVERYONE" ? "Everyone" : "Circles" }}</span>
+                  <span v-if="quest.termFixed" class="badge badge--success">Fixed time</span>
+                  <span v-else class="badge badge--warning">Flexible time</span>
                 </template>
               </DashboardQuestSummaryRow>
-        </button>
-      </div>
+            </button>
+          </div>
+
+          <UiPagination class="dashboard-find-work__pagination--bottom mt-4" :label="`Page ${currentPage} of ${totalPages}`" :has-previous="hasPreviousPage" :has-next="hasNextPage" @previous="previousPage" @next="nextPage" />
+        </template>
+      </template>
     </article>
   </section>
 </template>

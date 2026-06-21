@@ -2,7 +2,15 @@ import {computed, ref} from "vue"
 import {useRoute, useRouter} from "vue-router"
 import {currentUser, isAdmin} from "../auth.ts"
 import {buildRequestDebugInfo, formatDebugInfo} from "../httpDebug.ts"
-import {API_BASE_URL, type Quest, type QuestApplication} from "../api/sidequestApi.ts"
+import {API_BASE_URL} from "../api/httpClient.ts"
+import {type Quest, type QuestApplication} from "../api/sidequestApi.ts"
+import {
+  canManageQuestExecution,
+  canRespondToTermChange as canRespondToTermChangeRule,
+  isApprovedApplicantForQuest,
+  isQuestOwnedByUser
+} from "../lib/questAccess.ts"
+import {useTimedBanner} from "./useTimedBanner.ts"
 
 export const useQuestDetailPageState = () => {
   const route = useRoute()
@@ -13,44 +21,25 @@ export const useQuestDetailPageState = () => {
   const isLoading = ref(false)
   const error = ref("")
   const errorDetails = ref<string[]>([])
-  const copiedDebug = ref(false)
+  const copiedDebugBanner = useTimedBanner(1500)
+  const copiedDebug = computed(() => !!copiedDebugBanner.message.value)
   const isSaving = ref(false)
 
   const questId = computed(() => Number(route.params.id))
   const isOwner = computed(() => {
-    if (!quest.value || !currentUser.value) {
-      return false
-    }
-
-    return quest.value.creatorId === currentUser.value.id
+    return isQuestOwnedByUser(quest.value, currentUser.value?.id)
   })
 
   const isApprovedApplicant = computed(() => {
-    if (!quest.value || !currentUser.value) {
-      return false
-    }
-
-    return myApplications.value.some((application) => application.questId === quest.value?.id && application.status === "APPROVED")
+    return isApprovedApplicantForQuest(quest.value, myApplications.value)
   })
 
   const canRespondToTermChange = computed(() => {
-    if (!quest.value) {
-      return false
-    }
-
-    return quest.value.status === "WAITING_CONFIRMATION" && (isAdmin() || isApprovedApplicant.value)
+    return canRespondToTermChangeRule(quest.value, isAdmin(), isApprovedApplicant.value)
   })
 
   const canManageExecution = computed(() => {
-    if (!quest.value) {
-      return false
-    }
-
-    if (quest.value.status !== "ASSIGNED" && quest.value.status !== "IN_PROGRESS") {
-      return false
-    }
-
-    return isAdmin() || isOwner.value || isApprovedApplicant.value
+    return canManageQuestExecution(quest.value, isOwner.value, isAdmin(), isApprovedApplicant.value)
   })
 
   const copyDebugInfo = async () => {
@@ -59,10 +48,7 @@ export const useQuestDetailPageState = () => {
     }
 
     await navigator.clipboard.writeText(formatDebugInfo(errorDetails.value))
-    copiedDebug.value = true
-    window.setTimeout(() => {
-      copiedDebug.value = false
-    }, 1500)
+    copiedDebugBanner.show("Copied")
   }
 
   const setNotFoundErrorDetails = (fetchError: unknown) => {
