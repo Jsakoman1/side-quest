@@ -86,21 +86,6 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="admin-users-summary">
-            <div class="overview-stat-chip">
-              <span class="label">Total</span>
-              <strong>{{ usersPage.appUsers.length }}</strong>
-            </div>
-            <div class="overview-stat-chip">
-              <span class="label">Admins</span>
-              <strong>{{ usersPage.appUsers.filter((user) => user.role === 'ADMIN').length }}</strong>
-            </div>
-            <div class="overview-stat-chip">
-              <span class="label">Users</span>
-              <strong>{{ usersPage.appUsers.filter((user) => user.role === 'USER').length }}</strong>
-            </div>
-          </div>
-
           <div v-if="!usersPage.isLoadingUsers && !usersPage.pageError && !filteredUsers.length" class="empty-state">
             No users match this search.
           </div>

@@ -11,6 +11,7 @@ export type QuestNewsType =
   | "QUEST_COMPLETED"
   | "QUEST_REOPENED"
   | "QUEST_DELETED"
+  | "CIRCLE_REQUEST_ACCEPTED"
 
 const questNewsTypeLabels: Record<QuestNewsType, string> = {
   APPLICATION_CREATED: "New application",
@@ -24,7 +25,8 @@ const questNewsTypeLabels: Record<QuestNewsType, string> = {
   QUEST_STARTED: "Quest started",
   QUEST_COMPLETED: "Quest completed",
   QUEST_REOPENED: "Quest reopened",
-  QUEST_DELETED: "Quest deleted"
+  QUEST_DELETED: "Quest deleted",
+  CIRCLE_REQUEST_ACCEPTED: "Circle request accepted"
 }
 
 const questNewsTypeToneClasses: Record<QuestNewsType, string> = {
@@ -39,7 +41,8 @@ const questNewsTypeToneClasses: Record<QuestNewsType, string> = {
   QUEST_STARTED: "badge--accent",
   QUEST_COMPLETED: "badge--success",
   QUEST_REOPENED: "badge--warning",
-  QUEST_DELETED: "badge--danger"
+  QUEST_DELETED: "badge--danger",
+  CIRCLE_REQUEST_ACCEPTED: "badge--success"
 }
 
 export const formatQuestNewsType = (type: QuestNewsType) => questNewsTypeLabels[type] ?? type

@@ -21,6 +21,7 @@ public class AppUserMgr {
                 .username(appUser.getUsername())
                 .profileDescription(appUser.getProfileDescription())
                 .profileAvatarDataUrl(appUser.getProfileAvatarDataUrl())
+                .createdAt(appUser.getCreatedAt())
                 .role(appUser.getRole() == null ? AppUserRole.USER.name() : appUser.getRole().name())
                 .build();
     }

@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
+
 @Getter
 @Setter
 @Entity
@@ -25,6 +27,9 @@ public class AppUser {
 
     @Column(columnDefinition = "TEXT")
     private String profileAvatarDataUrl;
+
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt = Instant.now();
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;

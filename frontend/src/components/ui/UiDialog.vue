@@ -4,6 +4,8 @@ defineProps<{
   title: string
   subtitle?: string
   leading?: string
+  position?: "center" | "drawer"
+  size?: "sm" | "md" | "lg" | "xl"
 }>()
 
 defineEmits<{
@@ -13,8 +15,12 @@ defineEmits<{
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="dialog-backdrop" @click.self="$emit('close')">
-      <div class="dialog-panel card">
+    <div
+      v-if="open"
+      :class="['dialog-backdrop', { 'dialog-backdrop--drawer': position === 'drawer' }]"
+      @click.self="$emit('close')"
+    >
+      <div :class="['dialog-panel card', { 'dialog-panel--drawer': position === 'drawer' }, size ? `dialog-panel--${size}` : '']">
         <div v-if="title || subtitle || $slots.actions" class="card__header">
           <div class="card__header-main">
             <span v-if="leading" class="card__header-leading">{{ leading }}</span>

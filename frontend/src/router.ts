@@ -1,6 +1,7 @@
 import {createRouter, createWebHistory} from "vue-router";
 import AdminQuestsPage from "./pages/AdminQuestsPage.vue";
 import AdminUsersPage from "./pages/AdminUsersPage.vue";
+import CirclesView from "./views/CirclesView.vue";
 import QuestsPage from "./pages/QuestsPage.vue";
 import QuestDetailView from "./views/QuestDetailView.vue";
 import LoginView from "./views/LoginView.vue";
@@ -25,6 +26,11 @@ const routes = [
     {
         path: '/quests',
         component: QuestsPage,
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/circles',
+        component: CirclesView,
         meta: {requiresAuth: true}
     },
     {

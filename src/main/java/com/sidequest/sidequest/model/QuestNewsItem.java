@@ -25,10 +25,10 @@ public class QuestNewsItem {
     @Column(name = "actor_username", nullable = false)
     private String actorUsername;
 
-    @Column(name = "quest_id", nullable = false)
+    @Column(name = "quest_id")
     private Long questId;
 
-    @Column(name = "quest_title", nullable = false)
+    @Column(name = "quest_title")
     private String questTitle;
 
     @Column(name = "application_id")

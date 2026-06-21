@@ -1,6 +1,7 @@
 package com.sidequest.sidequest.dto;
 
 import com.sidequest.sidequest.model.QuestApplicationStatus;
+import com.sidequest.sidequest.model.QuestStatus;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -18,6 +19,7 @@ public class QuestApplicationResponseDTO {
     private Long questId;
     private String questTitle;
     private String questDescription;
+    private QuestStatus questStatus;
 
     private Long applicantId;
     private String applicantUsername;

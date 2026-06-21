@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import {ref, onMounted} from "vue"
+import {computed, ref, onMounted} from "vue"
 import {useQuestDetailPage} from "../composables/useQuestDetailPage.ts"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
-import ProfileAvatar from "../components/profile/ProfileAvatar.vue"
 import ProfileBio from "../components/profile/ProfileBio.vue"
+import {richTextHasContent} from "../shared/richText.ts"
 import {formatQuestTerm} from "../shared/questSchedule.ts"
-import {formatQuestStatus} from "../lib/questDashboardRules.ts"
 import {useTimedBanner} from "../composables/useTimedBanner.ts"
+import {formatApplicationStatus, formatQuestStatus, statusBadgeClass} from "../lib/questDashboardRules.ts"
 
 const {
   router,
@@ -18,7 +18,10 @@ const {
   copiedDebug,
   isSaving,
   isOwner,
+  isApprovedApplicant,
+  canManageExecution,
   canRespondToTermChange,
+  myApplications,
   updateStatus,
   confirmQuestTermChange,
   rejectQuestTermChange,
@@ -26,6 +29,10 @@ const {
   copyDebugInfo,
   init
 } = useQuestDetailPage()
+
+const myApplication = computed(() => {
+  return quest ? myApplications.find((application) => application.questId === quest.id) ?? null : null
+})
 
 const isActionInProgress = ref(false)
 const actionBanner = useTimedBanner()
@@ -104,7 +111,6 @@ onMounted(init)
     <div class="page-header">
       <div>
         <h1 class="page-title">Quest details</h1>
-        <p class="page-subtitle">A small overview of the quest and the available owner actions.</p>
       </div>
 
       <div class="button-row">
@@ -136,53 +142,70 @@ onMounted(init)
       <div class="debug-inline mt-2">GET http://localhost:8080/quests/{{ questId }}</div>
     </div>
 
-    <div v-if="quest" class="card">
+  <div v-if="quest" class="card">
       <div class="card__header">
-        <div>
-          <h2 class="card__title">{{ quest.title }}</h2>
-          <p class="page-subtitle mt-2">{{ quest.description }}</p>
-        </div>
         <div class="stack">
-          <span class="badge badge--accent">{{ formatQuestStatus(quest.status) }}</span>
-          <span v-if="quest.reopenedAt && quest.status === 'OPEN'" class="badge badge--warning">Reopened</span>
+          <h2 class="card__title">{{ quest.title }}</h2>
         </div>
       </div>
 
-      <div class="grid grid--two">
-        <div class="stack">
-          <div class="field">
-            <span class="label">Quest ID</span>
-            <strong>{{ quest.id }}</strong>
-          </div>
-          <div class="field">
-            <span class="label">Creator</span>
-            <div class="profile-card__identity">
-              <RouterLink class="profile-link" :to="`/users/${quest.creatorId}`">
-                <ProfileAvatar
-                  :username="quest.creatorUsername"
-                  :avatar-data-url="quest.creatorProfileAvatarDataUrl"
-                  :size="48"
-                />
-                <strong>{{ quest.creatorUsername }}</strong>
-              </RouterLink>
-              <ProfileBio :text="quest.creatorProfileDescription" />
-            </div>
-          </div>
+      <div v-if="myApplication" class="dialog-focus-card dialog-focus-card--application">
+        <div class="dialog-focus-card__top">
+          <span :class="['badge', statusBadgeClass(myApplication.status)]">
+            {{ formatApplicationStatus(myApplication.status) }}
+          </span>
+          <span class="dialog-focus-card__kicker">Your application</span>
         </div>
 
-        <div class="stack">
-          <div class="field">
-            <span class="label">Award</span>
-            <strong>{{ quest.awardAmount }}</strong>
-          </div>
-          <div class="field">
-            <span class="label">Scheduled time</span>
-            <strong>{{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}</strong>
-          </div>
-          <div class="field">
-            <span class="label">Time type</span>
-            <strong>{{ quest.termFixed ? "Fixed time" : "By agreement" }}</strong>
-          </div>
+        <div class="dialog-focus-card__title">
+          $ {{ myApplication.proposedPrice }}
+        </div>
+
+        <ProfileBio
+          v-if="richTextHasContent(myApplication.message)"
+          class="dialog-sheet__description dialog-sheet__description--flat"
+          :text="myApplication.message"
+        />
+      </div>
+
+      <div class="dialog-focus-card dialog-focus-card--primary">
+        <div class="dialog-focus-card__top">
+          <span :class="['badge', statusBadgeClass(quest.status)]">
+            {{ formatQuestStatus(quest.status) }}
+          </span>
+          <span class="dialog-focus-card__kicker">Quest summary</span>
+        </div>
+
+        <div class="dialog-focus-card__title">
+          $ {{ quest.awardAmount }}
+        </div>
+
+        <div class="dialog-focus-card__meta">
+          <span>{{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}</span>
+          <span>{{ quest.termFixed ? "Fixed" : "Negotiable" }}</span>
+        </div>
+      </div>
+
+      <div v-if="quest.images?.length" class="quest-gallery quest-gallery--dialog">
+        <div v-for="(image, index) in quest.images" :key="`${quest.id}-${index}`" class="quest-gallery__item quest-gallery__item--dialog">
+          <img class="quest-gallery__image" :src="image" alt="Quest image">
+        </div>
+      </div>
+
+      <ProfileBio
+        v-if="richTextHasContent(quest.description)"
+        class="dialog-sheet__description"
+        :text="quest.description"
+      />
+
+      <div class="dialog-focus-grid">
+        <div class="field">
+          <span class="label">Scheduled time</span>
+          <strong>{{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}</strong>
+        </div>
+        <div class="field">
+          <span class="label">Time type</span>
+          <strong>{{ quest.termFixed ? "Fixed time" : "By agreement" }}</strong>
         </div>
       </div>
 
@@ -201,7 +224,7 @@ onMounted(init)
         </div>
       </div>
 
-      <div v-if="isOwner" class="quest-footer">
+      <div v-if="canManageExecution" class="quest-footer">
         <div class="divider"></div>
         <div class="button-row">
           <button
@@ -211,7 +234,7 @@ onMounted(init)
             :disabled="isSaving"
             @click="updateStatus('start')"
           >
-            Start
+            Start work
           </button>
           <button
             v-if="quest.status === 'IN_PROGRESS'"
@@ -220,15 +243,16 @@ onMounted(init)
             :disabled="isSaving"
             @click="updateStatus('complete')"
           >
-            Complete
+            Mark complete
           </button>
-          <button
-            v-if="quest.status !== 'COMPLETED' && quest.status !== 'CANCELLED'"
-            class="button button--danger"
-            type="button"
-            :disabled="isSaving || isActionInProgress"
-            @click="handleDeleteQuest"
-          >
+          <span v-if="isApprovedApplicant && !isOwner" class="muted">You are the approved applicant for this quest.</span>
+        </div>
+      </div>
+
+      <div v-if="isOwner && quest.status !== 'COMPLETED' && quest.status !== 'CANCELLED'" class="quest-footer">
+        <div class="divider"></div>
+        <div class="button-row">
+          <button class="button button--danger" type="button" :disabled="isSaving || isActionInProgress" @click="handleDeleteQuest">
             Delete
           </button>
         </div>

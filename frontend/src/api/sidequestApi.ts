@@ -2,6 +2,7 @@ import axios from "axios"
 import {authHeader} from "../auth.ts"
 import type {
   AppUserRole,
+  QuestAudience,
   QuestApplicationStatus,
   QuestStatus
 } from "../shared/sidequestDomain.ts"
@@ -25,12 +26,14 @@ export interface Quest {
   creatorProfileAvatarDataUrl: string | null
   title: string
   description: string
+  images: string[]
   awardAmount: number
   scheduledAt: string | null
   termFixed: boolean
   pendingScheduledAt: string | null
   pendingTermFixed: boolean | null
   reopenedAt: string | null
+  audience: QuestAudience
   status: QuestStatus
 }
 
@@ -39,6 +42,7 @@ export interface QuestApplication {
   questId: number
   questTitle: string
   questDescription: string
+  questStatus: QuestStatus
   applicantId: number
   applicantUsername: string
   applicantProfileDescription: string | null
@@ -55,9 +59,40 @@ export interface AppUser {
   username: string
   profileDescription: string | null
   profileAvatarDataUrl: string | null
+  createdAt: string
   openQuestCount: number
   openQuests: Quest[]
   role: AppUserRole
+}
+
+export interface CircleRequest {
+  id: number
+  requesterId: number
+  requesterUsername: string
+  requesterProfileDescription: string | null
+  requesterProfileAvatarDataUrl: string | null
+  recipientId: number
+  recipientUsername: string
+  recipientProfileDescription: string | null
+  recipientProfileAvatarDataUrl: string | null
+  createdAt: string
+  acceptedAt: string | null
+  blockedAt: string | null
+}
+
+export interface CircleCandidate {
+  id: number
+  username: string
+  profileDescription: string | null
+  profileAvatarDataUrl: string | null
+  email: string
+  relationStatus: "NONE" | "CIRCLE" | "INCOMING_REQUEST" | "OUTGOING_REQUEST" | "BLOCKED"
+  blockedByCurrentUser: boolean
+}
+
+export interface CircleRelation {
+  relationStatus: "NONE" | "CIRCLE" | "INCOMING_REQUEST" | "OUTGOING_REQUEST" | "BLOCKED"
+  blockedByCurrentUser: boolean
 }
 
 export interface QuestNewsItem {
@@ -65,8 +100,8 @@ export interface QuestNewsItem {
   type: QuestNewsType
   title: string
   message: string
-  questId: number
-  questTitle: string
+  questId: number | null
+  questTitle: string | null
   applicationId: number | null
   actorUserId: number
   actorUsername: string
@@ -77,9 +112,11 @@ export interface QuestNewsItem {
 export interface QuestRequest {
   title: string
   description: string
+  images?: string[]
   awardAmount: number | null
   scheduledAt?: string | null
   termFixed?: boolean
+  audience?: QuestAudience
   creatorId?: number
   status?: QuestStatus
 }
@@ -96,6 +133,14 @@ export interface AppUserRequest {
   profileDescription?: string | null
   profileAvatarDataUrl?: string | null
   role?: AppUserRole
+}
+
+export interface CircleRequestCreate {
+  recipientId: number
+}
+
+export interface CircleBlockCreate {
+  blockedUserId: number
 }
 
 export const sidequestApi = {
@@ -201,5 +246,48 @@ export const sidequestApi = {
 
   async deleteAppUser(id: number): Promise<void> {
     await api.delete(`/app_users/${id}`, withAuth())
+  },
+
+  async getMyCircles(): Promise<CircleRequest[]> {
+    return (await api.get<CircleRequest[]>("/circles", withAuth())).data
+  },
+
+  async getIncomingCircleRequests(): Promise<CircleRequest[]> {
+    return (await api.get<CircleRequest[]>("/circles/requests/incoming", withAuth())).data
+  },
+
+  async getOutgoingCircleRequests(): Promise<CircleRequest[]> {
+    return (await api.get<CircleRequest[]>("/circles/requests/outgoing", withAuth())).data
+  },
+
+  async getCircleRelation(userId: number): Promise<CircleRelation> {
+    return (await api.get<CircleRelation>(`/circles/relations/${userId}`, withAuth())).data
+  },
+
+  async searchCircleUsers(query: string): Promise<CircleCandidate[]> {
+    return (await api.get<CircleCandidate[]>("/circles/search", {
+      ...withAuth(),
+      params: {q: query}
+    })).data
+  },
+
+  async createCircleRequest(dto: CircleRequestCreate): Promise<CircleRequest> {
+    return (await api.post("/circles/requests", dto, withAuth())).data
+  },
+
+  async acceptCircleRequest(id: number): Promise<CircleRequest> {
+    return (await api.patch(`/circles/requests/${id}/accept`, {}, withAuth())).data
+  },
+
+  async deleteCircleRequest(id: number): Promise<void> {
+    await api.delete(`/circles/requests/${id}`, withAuth())
+  },
+
+  async blockCircleUser(dto: CircleBlockCreate): Promise<CircleRequest> {
+    return (await api.post("/circles/blocks", dto, withAuth())).data
+  },
+
+  async unblockCircleUser(userId: number): Promise<void> {
+    await api.delete(`/circles/blocks/${userId}`, withAuth())
   }
 }

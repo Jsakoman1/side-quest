@@ -1,32 +1,34 @@
 <script setup lang="ts">
-withDefaults(
-  defineProps<{
-    primaryLabel: string
-    primaryValue: string | number
-    title: string
-    description?: string
-    primaryIcon?: string
-    secondaryLabel?: string
-    secondaryValue?: string | number | null
-    secondaryIcon?: string
-    moneyTone?: "income" | "expense" | "neutral"
-    descriptionClass?: string
-    showLabels?: boolean
-    reserveSecondarySpace?: boolean
-    reserveDescriptionSpace?: boolean
-  }>(),
-  {
-    primaryIcon: "",
-    secondaryLabel: "",
-    secondaryValue: null,
-    secondaryIcon: "",
-    moneyTone: "neutral",
-    descriptionClass: "text-clamp",
-    showLabels: false,
-    reserveSecondarySpace: false,
-    reserveDescriptionSpace: false,
-  },
-)
+import {computed} from "vue"
+import {richTextToPlainText} from "../../shared/richText.ts"
+
+const props = withDefaults(defineProps<{
+  primaryLabel: string
+  primaryValue: string | number
+  title: string
+  description?: string
+  primaryIcon?: string
+  secondaryLabel?: string
+  secondaryValue?: string | number | null
+  secondaryIcon?: string
+  moneyTone?: "income" | "expense" | "neutral"
+  descriptionClass?: string
+  showLabels?: boolean
+  reserveSecondarySpace?: boolean
+  reserveDescriptionSpace?: boolean
+}>(), {
+  primaryIcon: "",
+  secondaryLabel: "",
+  secondaryValue: null,
+  secondaryIcon: "",
+  moneyTone: "neutral",
+  descriptionClass: "text-clamp",
+  showLabels: false,
+  reserveSecondarySpace: false,
+  reserveDescriptionSpace: false,
+})
+
+const descriptionText = computed(() => richTextToPlainText(props.description ?? ""))
 </script>
 
 <template>
@@ -72,15 +74,15 @@ withDefaults(
     <div class="quest-summary-row__main">
       <strong class="quest-summary-row__title">{{ title }}</strong>
       <div
-        v-if="description || reserveDescriptionSpace"
+        v-if="descriptionText || reserveDescriptionSpace"
         :class="[
           'muted',
           'mt-1',
           descriptionClass,
-          { 'quest-summary-row__description--placeholder': !description },
+          { 'quest-summary-row__description--placeholder': !descriptionText },
         ]"
       >
-        {{ description || "\u00A0" }}
+        {{ descriptionText || "\u00A0" }}
       </div>
     </div>
 

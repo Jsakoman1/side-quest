@@ -7,6 +7,7 @@ export interface SessionUser {
   username: string
   profileDescription: string | null
   profileAvatarDataUrl: string | null
+  createdAt: string
   role: AppUserRole
   token: string | null
 }
@@ -29,6 +30,7 @@ const loadUser = () => {
       username: parsed.username,
       profileDescription: parsed.profileDescription ?? null,
       profileAvatarDataUrl: parsed.profileAvatarDataUrl ?? null,
+      createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : new Date().toISOString(),
       role: parsed.role ?? "USER",
       token: parsed.token ?? null
     }

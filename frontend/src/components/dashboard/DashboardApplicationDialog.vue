@@ -4,8 +4,9 @@ import {useRouter} from "vue-router"
 import UiDialog from "../ui/UiDialog.vue"
 import DashboardEditSheet from "./DashboardEditSheet.vue"
 import UiStatusBanner from "../ui/UiStatusBanner.vue"
-import ProfileAvatar from "../profile/ProfileAvatar.vue"
+import RichTextEditor from "../editor/RichTextEditor.vue"
 import ProfileBio from "../profile/ProfileBio.vue"
+import {richTextHasContent} from "../../shared/richText.ts"
 import {useTimedBanner} from "../../composables/useTimedBanner.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 
@@ -28,6 +29,7 @@ watch(application, () => {
 })
 
 const canEdit = computed(() => application.value?.status === "PENDING")
+const quest = computed(() => (application.value ? props.dashboard.questForId(application.value.questId) : null))
 
 const setActionMessage = (message: string, tone: "success" | "warning" = "success") => {
   actionBanner.show(message, tone)
@@ -63,7 +65,8 @@ const withdrawApplication = () => {
     :open="!!application"
     :leading="application ? `$ ${application.proposedPrice}` : ''"
     :title="application?.questTitle ?? 'Application'"
-    :subtitle="''"
+    subtitle="Your application, your message, your next move."
+    size="lg"
     @close="props.dashboard.closeApplicationDialog()"
   >
     <template v-if="canEdit && !isEditing" #actions>
@@ -71,42 +74,73 @@ const withdrawApplication = () => {
     </template>
 
     <div v-if="application" class="stack dialog-sheet">
-      <div class="dialog-sheet__hero">
-        <div class="dialog-sheet__meta">
-          <span class="badge">Creator: {{ props.dashboard.questCreatorUsernameForQuest(application.questId) }}</span>
+      <section class="dialog-focus-card dialog-focus-card--primary">
+        <div class="dialog-focus-card__top">
+          <span :class="['badge', props.dashboard.statusBadgeClass(application.status)]">
+            {{ props.dashboard.formatApplicationStatus(application.status) }}
+          </span>
+          <span class="dialog-focus-card__kicker">Your application</span>
         </div>
-        <div class="dialog-profile-card">
-          <div class="profile-card__identity">
-            <RouterLink class="profile-link" :to="`/users/${props.dashboard.questForId(application.questId)?.creatorId}`">
-              <ProfileAvatar
-                :username="props.dashboard.questCreatorUsernameForQuest(application.questId)"
-                :avatar-data-url="props.dashboard.questForId(application.questId)?.creatorProfileAvatarDataUrl"
-                :size="72"
-              />
-              <strong>{{ props.dashboard.questCreatorUsernameForQuest(application.questId) }}</strong>
-            </RouterLink>
-            <ProfileBio :text="props.dashboard.questForId(application.questId)?.creatorProfileDescription" />
-          </div>
+
+        <div class="dialog-focus-card__title">
+          {{ application!.questTitle }}
+        </div>
+
+        <div class="dialog-focus-card__meta">
+          <span>$ {{ application!.proposedPrice }}</span>
+          <span v-if="quest">Quest status: {{ props.dashboard.formatStatus(quest.status) }}</span>
         </div>
       </div>
 
       <UiStatusBanner :message="actionMessage" :tone="actionMessageTone" />
 
-      <p class="dialog-sheet__description">{{ application.questDescription }}</p>
+      <section class="dialog-focus-card dialog-focus-card--soft">
+        <div class="dialog-focus-card__section-title">Message</div>
+        <ProfileBio
+          v-if="richTextHasContent(application!.message)"
+          class="dialog-sheet__description dialog-sheet__description--flat"
+          :text="application!.message"
+        />
+      </section>
 
-      <form v-if="canEdit && isEditing" class="stack" @submit.prevent="props.dashboard.saveEditedApplication(application.questId)">
+      <section v-if="quest" class="dialog-focus-card dialog-focus-card--soft">
+        <div class="dialog-focus-card__section-title">Quest context</div>
+        <div class="dialog-focus-grid">
+          <div class="field">
+            <span class="label">Scheduled time</span>
+            <strong>{{ props.dashboard.formatQuestTermLabel(quest) }}</strong>
+          </div>
+          <div class="field">
+            <span class="label">Posted by</span>
+            <RouterLink class="profile-link profile-link--text" :to="`/users/${quest.creatorId}`">
+              {{ quest.creatorUsername }}
+            </RouterLink>
+          </div>
+        </div>
+      </section>
+
+      <form v-if="canEdit && isEditing" class="stack calendar-application-form" @submit.prevent="props.dashboard.saveEditedApplication(application!.questId)">
         <DashboardEditSheet :minimal="true">
-          <div class="dashboard-edit-form dashboard-edit-form--dialog">
-            <label class="field dashboard-edit-field">
+          <div class="dashboard-edit-form dashboard-edit-form--dialog dashboard-edit-form--application">
+            <label class="field dashboard-edit-field dashboard-edit-field--message">
               <span class="label">Message</span>
-              <textarea v-model="props.dashboard.editApplicationMessage" class="textarea" />
+              <RichTextEditor
+                v-model="props.dashboard.editApplicationMessage"
+                placeholder=""
+                toolbar-label="Message tools"
+              />
             </label>
 
-            <label class="field dashboard-edit-field">
+            <label class="field dashboard-edit-field dashboard-edit-field--price">
               <span class="label">Proposed price</span>
               <div class="dashboard-edit-amount">
                 <span class="dashboard-edit-amount__symbol" aria-hidden="true">$</span>
-                <input v-model="props.dashboard.editApplicationPrice" class="input dashboard-edit-amount__input" inputmode="decimal" placeholder="50" />
+                <input
+                  v-model="props.dashboard.editApplicationPrice"
+                  class="input dashboard-edit-amount__input"
+                  inputmode="decimal"
+                  placeholder="50"
+                />
               </div>
             </label>
           </div>
@@ -119,7 +153,7 @@ const withdrawApplication = () => {
       </form>
 
       <div v-else class="dialog-sheet__footer">
-        <button class="button button--secondary" type="button" @click="router.push(`/quests/${application.questId}`)">
+        <button class="button button--secondary" type="button" @click="router.push(`/quests/${application!.questId}`)">
           Open quest
         </button>
         <button

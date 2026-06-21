@@ -6,6 +6,8 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -27,6 +29,12 @@ public class Quest {
     @Column(length = 2000)
     private String description;
 
+    @ElementCollection
+    @CollectionTable(name = "quest_image", joinColumns = @JoinColumn(name = "quest_id"))
+    @OrderColumn(name = "sort_order")
+    @Column(name = "image_data_url", nullable = false, length = 12000)
+    private List<String> images = new ArrayList<>();
+
     @Column(precision = 10, scale = 2)
     private BigDecimal awardAmount;
 
@@ -44,6 +52,10 @@ public class Quest {
 
     @Column(name = "reopened_at")
     private Instant reopenedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private QuestAudience audience = QuestAudience.CIRCLES;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "term_change_previous_status")

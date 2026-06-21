@@ -2,18 +2,19 @@
 import {onMounted} from "vue"
 import {useRouter} from "vue-router"
 import DashboardFindQuests from "../components/dashboard/DashboardFindQuests.vue"
-import DashboardMyApplications from "../components/dashboard/DashboardMyApplications.vue"
 import DashboardMyQuests from "../components/dashboard/DashboardMyQuests.vue"
 import DashboardOverview from "../components/dashboard/DashboardOverview.vue"
+import DashboardNews from "../components/dashboard/DashboardNews.vue"
 import DashboardPostWork from "../components/dashboard/DashboardPostWork.vue"
-import DashboardProfile from "../components/dashboard/DashboardProfile.vue"
+import DashboardApplicationsDialog from "../components/dashboard/DashboardApplicationsDialog.vue"
+import DashboardOpenWorkDialog from "../components/dashboard/DashboardOpenWorkDialog.vue"
 import DashboardSidebar from "../components/dashboard/DashboardSidebar.vue"
 import DashboardEditSheet from "../components/dashboard/DashboardEditSheet.vue"
 import DashboardQuestDialog from "../components/dashboard/DashboardQuestDialog.vue"
 import DashboardApplicationDialog from "../components/dashboard/DashboardApplicationDialog.vue"
+import RichTextEditor from "../components/editor/RichTextEditor.vue"
 import UiDialog from "../components/ui/UiDialog.vue"
 import ProfileAvatar from "../components/profile/ProfileAvatar.vue"
-import ProfileBio from "../components/profile/ProfileBio.vue"
 import {logoutUser} from "../auth.ts"
 import {useQuestDashboard} from "../composables/useQuestDashboard.ts"
 
@@ -93,16 +94,31 @@ onMounted(dashboard.init)
         </div>
 
         <DashboardOverview v-if="dashboard.activeTab === 'overview'" :dashboard="dashboard" />
-        <DashboardPostWork v-else-if="dashboard.activeTab === 'post-work'" :dashboard="dashboard" />
-        <DashboardMyQuests v-else-if="dashboard.activeTab === 'my-quests'" :dashboard="dashboard" />
-        <DashboardFindQuests v-else-if="dashboard.activeTab === 'find-quests'" :dashboard="dashboard" />
-        <DashboardMyApplications v-else-if="dashboard.activeTab === 'my-applications'" :dashboard="dashboard" />
-        <DashboardProfile v-else-if="dashboard.activeTab === 'profile'" :dashboard="dashboard" />
+
+        <section v-else-if="dashboard.activeTab === 'create-job'" class="stack">
+          <button class="dashboard-launch-card dashboard-launch-card--create" type="button" @click="dashboard.openCreateJobDialog()">
+            <div class="dashboard-launch-card__copy">
+              <div class="dashboard-kicker">Create job</div>
+              <h2 class="card__title">Draft a new job</h2>
+              <p class="muted mt-2 mb-0">Open the brief form to add title, budget, timing, and visibility.</p>
+            </div>
+            <div class="dashboard-launch-card__action">
+              <span class="dashboard-launch-card__icon" aria-hidden="true">+</span>
+              <span>Open form</span>
+            </div>
+          </button>
+          <DashboardMyQuests :dashboard="dashboard" />
+        </section>
+
+        <section v-else-if="dashboard.activeTab === 'find-work'" class="stack">
+          <DashboardFindQuests :dashboard="dashboard" />
+        </section>
 
         <UiDialog
           :open="dashboard.isProfileEditDialogOpen"
           title="Edit profile"
           subtitle="Update your username, avatar, and profile description."
+          size="xl"
           @close="dashboard.closeProfileEditDialog"
         >
           <form @submit.prevent="dashboard.saveProfile">
@@ -145,21 +161,12 @@ onMounted(dashboard.init)
 
                   <label class="field dashboard-edit-field dashboard-edit-field--profile-description">
                     <span class="label">Profile description</span>
-                    <textarea
+                    <RichTextEditor
                       v-model="dashboard.profileDescription"
-                      class="textarea"
-                      rows="6"
-                      placeholder="Tell people what you do, how you work, and what they can expect."
+                      placeholder=""
+                      toolbar-label="Profile tools"
                     />
-                    <p class="muted mt-2 mb-0">
-                      Supports simple markdown like **bold**, _italic_, links, and bullet lists.
-                    </p>
                   </label>
-
-                  <div class="profile-editor__preview">
-                    <span class="label">Preview</span>
-                    <ProfileBio :text="dashboard.profileDescription" />
-                  </div>
                 </div>
               </div>
 
@@ -170,6 +177,37 @@ onMounted(dashboard.init)
           </form>
         </UiDialog>
 
+        <UiDialog
+          :open="dashboard.isNotificationsDialogOpen"
+          title=""
+          position="drawer"
+          @close="dashboard.closeNotificationsDialog"
+        >
+          <DashboardNews :dashboard="dashboard" />
+        </UiDialog>
+
+        <UiDialog
+          :open="dashboard.isCreateJobDialogOpen"
+          title="Create job"
+          subtitle="Draft a job and publish it."
+          size="xl"
+          @close="dashboard.closeCreateJobDialog()"
+        >
+          <DashboardPostWork :dashboard="dashboard" />
+        </UiDialog>
+
+        <UiDialog
+          :open="dashboard.isFindWorkDialogOpen"
+          title="Find work"
+          subtitle="Browse open jobs."
+          size="xl"
+          @close="dashboard.closeFindWorkDialog()"
+        >
+          <DashboardFindQuests :dashboard="dashboard" :show-header="false" />
+        </UiDialog>
+
+        <DashboardApplicationsDialog :dashboard="dashboard" />
+        <DashboardOpenWorkDialog :dashboard="dashboard" />
         <DashboardQuestDialog :dashboard="dashboard" />
         <DashboardApplicationDialog :dashboard="dashboard" />
       </main>

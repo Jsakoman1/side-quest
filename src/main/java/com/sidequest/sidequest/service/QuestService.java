@@ -4,6 +4,7 @@ import com.sidequest.sidequest.dto.QuestRequestDTO;
 import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
+import com.sidequest.sidequest.model.QuestAudience;
 import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestApplication;
 import com.sidequest.sidequest.model.QuestStatus;
@@ -26,6 +27,7 @@ public class QuestService {
     private final AppUserRepository appUserRepository;
     private final QuestApplicationRepository questApplicationRepository;
     private final QuestNewsService questNewsService;
+    private final CircleService circleService;
     private final QuestMgr questMgr;
 
     public QuestService(
@@ -33,28 +35,41 @@ public class QuestService {
             AppUserRepository appUserRepository,
             QuestApplicationRepository questApplicationRepository,
             QuestNewsService questNewsService,
+            CircleService circleService,
             QuestMgr questMgr
     ) {
         this.questRepository = questRepository;
         this.appUserRepository = appUserRepository;
         this.questApplicationRepository = questApplicationRepository;
         this.questNewsService = questNewsService;
+        this.circleService = circleService;
         this.questMgr = questMgr;
     }
 
     public Quest createQuest(QuestRequestDTO dto, AppUser currentUser) {
         validateQuestCreationTermInput(dto.getScheduledAt(), dto.getTermFixed());
+        validateQuestImages(dto.getImages());
         Quest quest = questMgr.toEntity(dto, resolveQuestCreator(dto, currentUser));
+        if (quest.getAudience() == null) {
+            quest.setAudience(QuestAudience.CIRCLES);
+        }
         applyConfirmedQuestTermFields(quest, dto.getScheduledAt(), dto.getTermFixed());
         return questRepository.save(quest);
     }
 
-    public List<Quest> getAllQuests() {
-        return questRepository.findAllWithCreator();
+    public List<Quest> getAllQuests(AppUser currentUser) {
+        return questRepository.findAllWithCreator().stream()
+                .filter(quest -> canViewQuest(currentUser, quest))
+                .toList();
     }
 
-    public Quest getQuestById(Long id) {
-        return requireQuest(id);
+    public Quest getQuestById(Long id, AppUser currentUser) {
+        Quest quest = requireQuest(id);
+        if (!canViewQuest(currentUser, quest)) {
+            throw ServiceErrors.notFound("Quest not found with id " + id);
+        }
+
+        return quest;
     }
 
     @Transactional
@@ -74,7 +89,7 @@ public class QuestService {
 
     @Transactional
     public Quest startQuest(Long id, AppUser currentUser) {
-        Quest quest = requireQuestForOwnerActions(id, currentUser);
+        Quest quest = requireQuestForExecutionActions(id, currentUser);
         requireQuestStatus(quest, QuestStatus.ASSIGNED, "Quest can only be started after an application is approved");
         quest.setStatus(QuestStatus.IN_PROGRESS);
         Quest savedQuest = questRepository.save(quest);
@@ -84,7 +99,7 @@ public class QuestService {
 
     @Transactional
     public Quest completeQuest(Long id, AppUser currentUser) {
-        Quest quest = requireQuestForOwnerActions(id, currentUser);
+        Quest quest = requireQuestForExecutionActions(id, currentUser);
         requireQuestStatus(quest, QuestStatus.IN_PROGRESS, "Quest can only be completed while it is in progress");
         quest.setStatus(QuestStatus.COMPLETED);
         Quest savedQuest = questRepository.save(quest);
@@ -125,10 +140,23 @@ public class QuestService {
         return quest;
     }
 
+    private Quest requireQuestForExecutionActions(Long id, AppUser currentUser) {
+        Quest quest = requireQuest(id);
+        validateQuestExecutionAuthority(quest, currentUser);
+        return quest;
+    }
+
     private void applyQuestUpdates(Quest quest, QuestRequestDTO dto, AppUser currentUser) {
         quest.setTitle(dto.getTitle());
         quest.setDescription(dto.getDescription());
         quest.setAwardAmount(dto.getAwardAmount());
+        if (dto.getImages() != null) {
+            validateQuestImages(dto.getImages());
+            quest.setImages(new ArrayList<>(dto.getImages()));
+        }
+        if (dto.getAudience() != null) {
+            quest.setAudience(dto.getAudience());
+        }
 
         if (!isAdmin(currentUser)) {
             applyQuestTermUpdateForOwner(quest, dto, currentUser);
@@ -196,6 +224,25 @@ public class QuestService {
 
         if (Boolean.TRUE.equals(termFixed) && scheduledAt == null) {
             throw ServiceErrors.badRequest("Scheduled time is required when the term is fixed");
+        }
+    }
+
+    private void validateQuestImages(List<String> images) {
+        if (images == null) {
+          return;
+        }
+
+        if (images.size() > 10) {
+            throw ServiceErrors.badRequest("A quest can have at most 10 images");
+        }
+
+        for (String image : images) {
+            if (image == null || image.isBlank()) {
+                throw ServiceErrors.badRequest("Quest images must not be empty");
+            }
+            if (!image.startsWith("data:image/")) {
+                throw ServiceErrors.badRequest("Quest images must be image data URLs");
+            }
         }
     }
 
@@ -371,6 +418,26 @@ public class QuestService {
         validateQuestOwner(quest, currentUser);
     }
 
+    private void validateQuestExecutionAuthority(Quest quest, AppUser currentUser) {
+        if (isAdmin(currentUser)) {
+            return;
+        }
+
+        if (quest.getCreator().getId().equals(currentUser.getId())) {
+            return;
+        }
+
+        if (questApplicationRepository.findByQuestIdAndApplicantIdAndStatus(
+                quest.getId(),
+                currentUser.getId(),
+                QuestApplicationStatus.APPROVED
+        ).isPresent()) {
+            return;
+        }
+
+        throw ServiceErrors.forbidden("You are not allowed to manage this quest");
+    }
+
     private void requireQuestStatus(Quest quest, QuestStatus requiredStatus, String message) {
         if (quest.getStatus() != requiredStatus) {
             throw ServiceErrors.badRequest(message);
@@ -387,5 +454,21 @@ public class QuestService {
 
     private boolean isAdmin(AppUser user) {
         return user != null && user.getRole() == AppUserRole.ADMIN;
+    }
+
+    private boolean canViewQuest(AppUser currentUser, Quest quest) {
+        if (quest == null) {
+            return false;
+        }
+
+        if (isAdmin(currentUser) || quest.getCreator().getId().equals(currentUser != null ? currentUser.getId() : null)) {
+            return true;
+        }
+
+        if (quest.getAudience() == QuestAudience.EVERYONE) {
+            return true;
+        }
+
+        return circleService.isCircleBetween(currentUser, quest.getCreator());
     }
 }

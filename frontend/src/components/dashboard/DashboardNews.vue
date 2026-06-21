@@ -1,53 +1,69 @@
 <script setup lang="ts">
-import DashboardSectionHeader from "./DashboardSectionHeader.vue"
+import {computed} from "vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 import {formatQuestNewsType, questNewsBadgeClass} from "../../shared/questNews.ts"
 
-defineProps<{
+const props = defineProps<{
   dashboard: QuestDashboard
 }>()
+
+const feedItems = computed(() => {
+  return props.dashboard.unreadNewsItems.map((item) => ({
+    id: item.id,
+    title: item.title,
+    message: item.message,
+    actorUsername: item.actorUsername,
+    questTitle: item.questTitle,
+    createdAt: item.createdAt,
+    typeLabel: formatQuestNewsType(item.type),
+    badgeClass: questNewsBadgeClass(item.type),
+    questId: item.questId
+  }))
+})
+
+const openItem = async (item: {id: number; questId: number | null}) => {
+  await props.dashboard.markNewsItemAsRead(item.id)
+  props.dashboard.closeNotificationsDialog()
+
+  if (item.questId !== null && props.dashboard.questForId(item.questId)) {
+    props.dashboard.openQuestDialog(item.questId)
+  }
+}
 </script>
 
 <template>
-  <article class="card overview-panel overview-panel--news overview-panel--compact">
-    <DashboardSectionHeader
-      title="Updates"
-      subtitle="Recent activity across your quests and applications"
-    >
-      <template #stats>
-        <span v-if="dashboard.unreadNewsCount > 0" class="badge badge--accent">
-          Unread ({{ dashboard.unreadNewsCount }})
-        </span>
-        <button
-          v-if="dashboard.unreadNewsCount > 0"
-          type="button"
-          class="button button--secondary"
-          @click="dashboard.markNewsAsRead()"
-        >
-          Mark all read
-        </button>
-      </template>
-    </DashboardSectionHeader>
+  <section class="stack dashboard-news-panel dashboard-news-panel--drawer">
+    <div class="dashboard-news__titlebar">
+      <h2 class="dashboard-news__title">Notifications</h2>
 
-    <div v-if="dashboard.newsError" class="empty-state empty-state--error mt-3">
-      {{ dashboard.newsError }}
+      <button
+        v-if="props.dashboard.unreadNewsCount > 0"
+        class="button button--secondary dashboard-news__mark-all"
+        type="button"
+        @click="props.dashboard.markNewsAsRead()"
+      >
+        Clear all
+      </button>
     </div>
 
-    <div v-else-if="dashboard.recentNewsItems.length" class="news-feed mt-2">
-      <div
-        v-for="item in dashboard.recentNewsItems"
+    <div v-if="props.dashboard.newsError" class="empty-state empty-state--error">
+      {{ props.dashboard.newsError }}
+    </div>
+
+    <div v-else-if="feedItems.length" class="news-feed news-feed--dialog">
+      <button
+        v-for="item in feedItems"
         :key="item.id"
-        class="news-item"
-        :class="{ 'news-item--unread': item.readAt === null }"
+        type="button"
+        class="news-item news-item--dialog dashboard-news__item dashboard-news__item--button"
+        @click="openItem(item)"
       >
         <div class="news-item__top">
           <div class="news-item__badges">
-            <span v-if="item.readAt === null" class="badge badge--accent">Unread</span>
-            <span :class="['badge', questNewsBadgeClass(item.type)]">
-              {{ formatQuestNewsType(item.type) }}
-            </span>
+            <span class="badge badge--accent">Unread</span>
+            <span :class="['badge', item.badgeClass]">{{ item.typeLabel }}</span>
           </div>
-          <span class="news-item__time">{{ dashboard.formatDateTime(item.createdAt) }}</span>
+          <span class="news-item__time">{{ props.dashboard.formatDateTime(item.createdAt) }}</span>
         </div>
 
         <strong class="news-item__title">{{ item.title }}</strong>
@@ -55,35 +71,18 @@ defineProps<{
 
         <div class="news-item__footer">
           <span class="news-item__meta">
-            {{ item.actorUsername }} on {{ item.questTitle }}
+            {{ item.actorUsername }}<template v-if="item.questTitle"> on {{ item.questTitle }}</template>
           </span>
 
-          <button
-            v-if="dashboard.questForId(item.questId)"
-            type="button"
-            class="button button--secondary"
-            @click="dashboard.markNewsItemAsRead(item.id); dashboard.clearOverviewFocus(); dashboard.openQuestDialog(item.questId)"
-          >
-            Open quest
-          </button>
-          <button
-            v-if="item.readAt === null"
-            type="button"
-            class="button button--secondary"
-            @click="dashboard.markNewsItemAsRead(item.id)"
-          >
-            Mark read
-          </button>
+          <span class="button button--secondary news-item__actions-cta">
+            Open
+          </span>
         </div>
-      </div>
+      </button>
     </div>
 
-    <div v-else-if="dashboard.isLoadingNews" class="empty-state mt-3">
-      Loading updates...
+    <div v-else class="empty-state empty-state--soft">
+      No notifications yet.
     </div>
-
-    <div v-else class="empty-state mt-3">
-      No updates yet.
-    </div>
-  </article>
+  </section>
 </template>

@@ -1,8 +1,28 @@
 <script setup lang="ts">
-import {computed} from "vue"
+import {computed, onMounted} from "vue"
 import {currentUser} from "./auth.ts"
+import {authApi} from "./api/authApi.ts"
+import {saveSession, token} from "./services/sessionService.ts"
 
 const currentYear = computed(() => new Date().getFullYear())
+
+onMounted(() => {
+  if (!token.value) {
+    return
+  }
+
+  void (async () => {
+    try {
+      const response = await authApi.me()
+      saveSession({
+        ...response,
+        token: token.value
+      })
+    } catch {
+      // Keep the locally stored session if the refresh fails.
+    }
+  })()
+})
 </script>
 
 <template>

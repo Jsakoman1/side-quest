@@ -24,24 +24,28 @@ public class QuestApplicationService {
     private final QuestRepository questRepository;
     private final QuestApplicationMgr questApplicationMgr;
     private final QuestNewsService questNewsService;
+    private final CircleService circleService;
 
     public QuestApplicationService(
             QuestApplicationRepository questApplicationRepository,
             QuestRepository questRepository,
             QuestApplicationMgr questApplicationMgr,
-            QuestNewsService questNewsService
+            QuestNewsService questNewsService,
+            CircleService circleService
     ) {
         this.questApplicationRepository = questApplicationRepository;
         this.questRepository = questRepository;
         this.questApplicationMgr = questApplicationMgr;
         this.questNewsService = questNewsService;
+        this.circleService = circleService;
     }
 
     @Transactional
     public QuestApplicationResponseDTO applyForQuest(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
-        Quest quest = requireOpenQuest(questId);
+        Quest quest = requireVisibleOpenQuest(questId, currentUser);
         validateNotQuestCreator(quest, currentUser);
         validateNoDuplicateApplication(questId, currentUser.getId());
+        validateMessage(dto);
 
         QuestApplication application = questApplicationMgr.toEntity(dto, quest, currentUser);
         QuestApplicationResponseDTO response = saveAndMapApplication(application);
@@ -68,7 +72,8 @@ public class QuestApplicationService {
     @Transactional
     public QuestApplicationResponseDTO updateMyApplication(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
         QuestApplication application = requirePendingMyApplication(questId, currentUser);
-        application.setMessage(dto.getMessage());
+        validateMessage(dto);
+        application.setMessage(dto.getMessage() == null ? null : dto.getMessage().trim());
         application.setProposedPrice(dto.getProposedPrice());
         QuestApplicationResponseDTO response = saveAndMapApplication(application);
         questNewsService.notifyApplicationUpdated(application.getQuest(), application, currentUser);
@@ -122,6 +127,16 @@ public class QuestApplicationService {
 
     private Quest requireOpenQuest(Long questId) {
         Quest quest = requireQuest(questId);
+        validateQuestIsOpen(quest);
+        return quest;
+    }
+
+    private Quest requireVisibleOpenQuest(Long questId, AppUser currentUser) {
+        Quest quest = requireQuest(questId);
+        if (!circleService.canViewQuest(currentUser, quest)) {
+            throw ServiceErrors.notFound("Quest not found with id " + questId);
+        }
+
         validateQuestIsOpen(quest);
         return quest;
     }
@@ -188,6 +203,12 @@ public class QuestApplicationService {
     private void validateNoDuplicateApplication(Long questId, Long applicantId) {
         if (questApplicationRepository.existsByQuestIdAndApplicantId(questId, applicantId)) {
             throw ServiceErrors.conflict("You have already applied for this quest");
+        }
+    }
+
+    private void validateMessage(QuestApplicationRequestDTO dto) {
+        if (dto == null || dto.getMessage() == null || dto.getMessage().trim().isEmpty()) {
+            throw ServiceErrors.badRequest("Application message is required");
         }
     }
 

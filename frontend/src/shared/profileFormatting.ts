@@ -1,3 +1,5 @@
+import {sanitizeRichTextHtml} from "./richText.ts"
+
 const escapeHtml = (value: string) => {
   return value
     .replaceAll("&", "&amp;")
@@ -30,6 +32,10 @@ export const renderProfileText = (value: string | null | undefined) => {
   const text = value?.trim()
   if (!text) {
     return ""
+  }
+
+  if (/<\/?[a-z][\s\S]*>/i.test(text)) {
+    return sanitizeRichTextHtml(text)
   }
 
   const lines = text.split(/\r?\n/)

@@ -7,6 +7,8 @@ import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestStatus;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 public class QuestMgr {
 
@@ -29,6 +31,8 @@ public class QuestMgr {
                 .pendingScheduledAt(quest.getPendingScheduledAt())
                 .pendingTermFixed(quest.getPendingTermFixed())
                 .reopenedAt(quest.getReopenedAt())
+                .audience(quest.getAudience())
+                .images(List.copyOf(quest.getImages()))
                 .status(quest.getStatus())
                 .build();
     }
@@ -45,6 +49,8 @@ public class QuestMgr {
         quest.setAwardAmount(dto.getAwardAmount());
         quest.setScheduledAt(dto.getScheduledAt());
         quest.setTermFixed(Boolean.TRUE.equals(dto.getTermFixed()));
+        quest.setAudience(dto.getAudience() == null ? com.sidequest.sidequest.model.QuestAudience.CIRCLES : dto.getAudience());
+        quest.setImages(dto.getImages() == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(dto.getImages()));
         quest.setStatus(QuestStatus.OPEN);
 
         return quest;

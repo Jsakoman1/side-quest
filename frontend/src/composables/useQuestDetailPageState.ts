@@ -41,6 +41,18 @@ export const useQuestDetailPageState = () => {
     return quest.value.status === "WAITING_CONFIRMATION" && (isAdmin() || isApprovedApplicant.value)
   })
 
+  const canManageExecution = computed(() => {
+    if (!quest.value) {
+      return false
+    }
+
+    if (quest.value.status !== "ASSIGNED" && quest.value.status !== "IN_PROGRESS") {
+      return false
+    }
+
+    return isAdmin() || isOwner.value || isApprovedApplicant.value
+  })
+
   const copyDebugInfo = async () => {
     if (!errorDetails.value.length) {
       return
@@ -70,6 +82,7 @@ export const useQuestDetailPageState = () => {
     isOwner,
     isApprovedApplicant,
     canRespondToTermChange,
+    canManageExecution,
     copyDebugInfo,
     setNotFoundErrorDetails
   }

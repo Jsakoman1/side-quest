@@ -1,8 +1,9 @@
 export type AppUserRole = "USER" | "ADMIN"
+export type QuestAudience = "CIRCLES" | "EVERYONE"
 export type QuestStatus = "OPEN" | "ASSIGNED" | "WAITING_CONFIRMATION" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
 export type QuestApplicationStatus = "PENDING" | "APPROVED" | "DECLINED" | "WITHDRAWN"
-export type DashboardTab = "overview" | "post-work" | "my-quests" | "find-quests" | "my-applications" | "profile"
-export type OverviewFocus = "posted-work" | "applied-tasks" | "completed"
+export type DashboardTab = "overview" | "create-job" | "find-work" | "circles"
+export type OverviewFocus = "active-work" | "posted-work" | "applied-tasks" | "completed"
 export type QuestStatusFilter = QuestStatus | "ALL"
 export type QuestReopenState = "REOPENED" | "STANDARD"
 
@@ -21,15 +22,18 @@ export const questStatusOptions: Array<{value: QuestStatusFilter; label: string}
   {value: "CANCELLED", label: "Cancelled"}
 ]
 
+export const questAudienceOptions: Array<{value: QuestAudience; label: string; description: string}> = [
+  {value: "CIRCLES", label: "Circles", description: "Visible to your circles by default"},
+  {value: "EVERYONE", label: "Everyone", description: "Visible to everyone on the platform"}
+]
+
 export const dashboardTabs: Array<{
   id: DashboardTab
   title: string
   description: string
 }> = [
   {id: "overview", title: "Overview", description: ""},
-  {id: "post-work", title: "Create work", description: "Create a quest"},
-  {id: "my-quests", title: "Your work", description: "Your quests"},
-  {id: "find-quests", title: "Find work", description: "Open quests you can take"},
-  {id: "my-applications", title: "Applied work", description: "Applications you sent"},
-  {id: "profile", title: "Profile", description: "Your account"}
+  {id: "create-job", title: "Create job", description: "Post and manage your jobs"},
+  {id: "find-work", title: "Find work", description: "Browse open jobs"},
+  {id: "circles", title: "Circles", description: "Your trusted work circle"}
 ]

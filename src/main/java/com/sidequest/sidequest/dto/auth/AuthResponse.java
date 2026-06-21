@@ -6,6 +6,7 @@ public record AuthResponse(
         String username,
         String profileDescription,
         String profileAvatarDataUrl,
+        java.time.Instant createdAt,
         String role,
         String token
 ) {

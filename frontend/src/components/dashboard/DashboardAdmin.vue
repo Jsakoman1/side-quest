@@ -34,26 +34,7 @@ const filteredQuests = computed(() => {
       <DashboardSectionHeader
         title="Admin control center"
         subtitle="Quest workspace for approvals, editing, status control, and term confirmations."
-      >
-        <template #stats>
-          <div class="overview-stat-chip">
-            <span class="label">Quests</span>
-            <strong>{{ dashboard.questCount }}</strong>
-          </div>
-          <div class="overview-stat-chip">
-            <span class="label">Waiting</span>
-            <strong>{{ dashboard.waitingConfirmationQuestCount }}</strong>
-          </div>
-          <div class="overview-stat-chip">
-            <span class="label">Users</span>
-            <strong>{{ dashboard.totalUserCount }}</strong>
-          </div>
-          <div class="overview-stat-chip">
-            <span class="label">Admins</span>
-            <strong>{{ dashboard.adminUserCount }}</strong>
-          </div>
-        </template>
-      </DashboardSectionHeader>
+      />
 
       <div class="button-row">
         <button class="button" type="button" @click="dashboard.refreshDashboardData">Refresh data</button>
@@ -69,17 +50,18 @@ const filteredQuests = computed(() => {
           <input v-model="questSearch" class="input" placeholder="Title, creator, status, award..." />
         </label>
 
-        <div class="segmented">
-          <button
-            v-for="option in dashboard.questStatusOptions"
-            :key="option.value"
-            type="button"
-            :class="['segment', { 'segment--active': dashboard.adminQuestStatusFilter === option.value }]"
-            @click="dashboard.adminQuestStatusFilter = option.value"
-          >
-            {{ option.label }}
-          </button>
-        </div>
+        <label class="field">
+          <span class="label">Status</span>
+          <select v-model="dashboard.adminQuestStatusFilter" class="input">
+            <option
+              v-for="option in dashboard.questStatusOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
       </div>
 
       <div v-if="!filteredQuests.length" class="empty-state mt-4">

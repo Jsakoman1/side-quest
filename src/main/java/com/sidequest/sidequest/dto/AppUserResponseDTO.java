@@ -5,6 +5,7 @@ import lombok.*;
 import java.util.List;
 
 import com.sidequest.sidequest.dto.QuestResponseDTO;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -17,6 +18,7 @@ public class AppUserResponseDTO {
     private String username;
     private String profileDescription;
     private String profileAvatarDataUrl;
+    private Instant createdAt;
     private long openQuestCount;
     private List<QuestResponseDTO> openQuests;
     private String role;

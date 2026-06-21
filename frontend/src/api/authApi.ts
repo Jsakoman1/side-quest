@@ -1,5 +1,6 @@
 import axios from "axios"
 import {API_BASE_URL} from "./sidequestApi.ts"
+import {authHeader} from "../auth.ts"
 import type {AppUserRole} from "../shared/sidequestDomain.ts"
 
 const api = axios.create({
@@ -12,6 +13,7 @@ export interface AuthResponse {
   username: string
   profileDescription: string | null
   profileAvatarDataUrl: string | null
+  createdAt: string
   role: AppUserRole
   token: string
 }
@@ -34,5 +36,9 @@ export const authApi = {
 
   async register(dto: RegisterRequest): Promise<AuthResponse> {
     return (await api.post("/auth/register", dto)).data
+  },
+
+  async me(): Promise<AuthResponse> {
+    return (await api.get("/auth/me", {headers: authHeader()})).data
   }
 }

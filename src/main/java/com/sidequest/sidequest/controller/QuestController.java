@@ -28,16 +28,16 @@ public class QuestController {
     }
 
     @GetMapping
-    public List<QuestResponseDTO> getAllQuests() {
-        return questService.getAllQuests()
+    public List<QuestResponseDTO> getAllQuests(@AuthenticationPrincipal AppUser currentUser) {
+        return questService.getAllQuests(currentUser)
                 .stream()
                 .map(this::toDto)
                 .toList();
     }
 
     @GetMapping("/{id}")
-    public QuestResponseDTO getQuestById(@PathVariable long id) {
-        return toDto(questService.getQuestById(id));
+    public QuestResponseDTO getQuestById(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
+        return toDto(questService.getQuestById(id, currentUser));
     }
 
     @DeleteMapping("/{id}")

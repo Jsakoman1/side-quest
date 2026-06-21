@@ -26,6 +26,10 @@ const blobToDataUrl = (blob: Blob) => {
 }
 
 export const compressProfileAvatar = async (file: File, maxSize = 320, quality = 0.82) => {
+  return compressImageFile(file, maxSize, quality)
+}
+
+export const compressImageFile = async (file: File, maxSize = 320, quality = 0.82) => {
   if (!file.type.startsWith("image/")) {
     throw new Error("Please choose an image file.")
   }

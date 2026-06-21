@@ -10,16 +10,16 @@ import java.util.Optional;
 
 public interface QuestRepository extends JpaRepository<Quest, Long> {
 
-    @Query("select q from Quest q join fetch q.creator")
+    @Query("select distinct q from Quest q join fetch q.creator left join fetch q.images")
     List<Quest> findAllWithCreator();
 
-    @Query("select q from Quest q join fetch q.creator where q.id = :id")
+    @Query("select distinct q from Quest q join fetch q.creator left join fetch q.images where q.id = :id")
     Optional<Quest> findByIdWithCreator(Long id);
 
     long countByCreatorId(Long creatorId);
 
     long countByCreatorIdAndStatus(Long creatorId, QuestStatus status);
 
-    @Query("select q from Quest q join fetch q.creator where q.creator.id = :creatorId and q.status = :status order by q.id desc")
+    @Query("select distinct q from Quest q join fetch q.creator left join fetch q.images where q.creator.id = :creatorId and q.status = :status order by q.id desc")
     List<Quest> findByCreatorIdAndStatusOrderByIdDesc(Long creatorId, QuestStatus status);
 }

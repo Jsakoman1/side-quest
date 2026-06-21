@@ -2,7 +2,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue"
 import {useRoute, useRouter} from "vue-router"
 import {currentUser, isAdmin} from "../auth.ts"
 import {formatDebugInfo} from "../httpDebug.ts"
-import {type AppUser, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
+import {type AppUser, type CircleRequest, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
 import {
   applicationStatusSortOrder,
   formatApplicationStatus,
@@ -19,9 +19,11 @@ import {
 } from "../shared/questSchedule.ts"
 import {
   dashboardTabs,
+  questAudienceOptions,
   questStatusOptions,
   type DashboardTab,
   type OverviewFocus,
+  type QuestAudience,
   type QuestStatus,
   type QuestStatusFilter
 } from "../shared/sidequestDomain.ts"
@@ -35,6 +37,7 @@ export const useQuestDashboardState = () => {
   const myApplications = ref<QuestApplication[]>([])
   const newsItems = ref<QuestNewsItem[]>([])
   const unreadNewsCount = ref(0)
+  const incomingCircleRequests = ref<CircleRequest[]>([])
   const appUsers = ref<AppUser[]>([])
 
   const isLoadingQuests = ref(false)
@@ -55,6 +58,7 @@ export const useQuestDashboardState = () => {
   const feedbackType = ref<"error" | "success">("success")
   const copiedDebug = ref(false)
   const isProfileEditDialogOpen = ref(false)
+  const isNotificationsDialogOpen = ref(false)
   const successPulseTarget = ref("")
   const feedbackTimeout = ref<number | null>(null)
   let successPulseTimeout: number | undefined
@@ -64,11 +68,14 @@ export const useQuestDashboardState = () => {
   const questAwardAmount = ref("")
   const questScheduledAt = ref("")
   const questTermFixed = ref(false)
+  const questAudience = ref<QuestAudience>("CIRCLES")
   const questCreatorId = ref("")
+  const questImages = ref<string[]>([])
 
   const profileUsername = ref("")
   const profileDescription = ref(currentUser.value?.profileDescription ?? "")
   const profileAvatarDataUrl = ref(currentUser.value?.profileAvatarDataUrl ?? "")
+  const accountCreatedAt = computed(() => currentUser.value?.createdAt ?? new Date().toISOString())
 
   const myQuestStatusFilter = ref<QuestStatusFilter>("ALL")
   const adminQuestStatusFilter = ref<QuestStatusFilter>("ALL")
@@ -86,6 +93,7 @@ export const useQuestDashboardState = () => {
   const editQuestAwardAmount = ref("")
   const editQuestScheduledAt = ref("")
   const editQuestTermFixed = ref(false)
+  const editQuestAudience = ref<QuestAudience>("CIRCLES")
   const editQuestCreatorId = ref("")
   const editQuestStatus = ref<QuestStatus>("OPEN")
   const editingApplicationId = ref<number | null>(null)
@@ -94,6 +102,10 @@ export const useQuestDashboardState = () => {
   const overviewFocus = ref<OverviewFocus | null>(null)
   const questDialogId = ref<number | null>(null)
   const applicationDialogId = ref<number | null>(null)
+  const isCreateJobDialogOpen = ref(false)
+  const isFindWorkDialogOpen = ref(false)
+  const isOpenWorkDialogOpen = ref(false)
+  const isApplicationsDialogOpen = ref(false)
 
   const sectionTitle = computed(() => {
     return dashboardTabs.find((tab) => tab.id === activeTab.value)?.title ?? "Overview"
@@ -144,6 +156,7 @@ export const useQuestDashboardState = () => {
   }
 
   const myQuests = computed(() => sortedQuests.value.filter((quest) => isMyQuest(quest)))
+  const activeMyQuests = computed(() => myQuests.value.filter((quest) => quest.status === "ASSIGNED" || quest.status === "IN_PROGRESS"))
   const availableQuests = computed(() => sortedQuests.value.filter((quest) => !isMyQuest(quest) && quest.status === "OPEN"))
   const adminQuests = computed(() => sortedQuests.value)
   const appliedQuestIds = computed(() => new Set(myApplications.value.map((application) => application.questId)))
@@ -166,13 +179,26 @@ export const useQuestDashboardState = () => {
 
   const recentMyQuests = computed(() => myQuests.value.slice(0, 3))
   const recentMyApplications = computed(() => sortedMyApplications.value.slice(0, 3))
+  const activeWorkApplications = computed(() => sortedMyApplications.value.filter((application) => {
+    return application.status === "APPROVED"
+      && (application.questStatus === "ASSIGNED" || application.questStatus === "IN_PROGRESS" || application.questStatus === "WAITING_CONFIRMATION")
+  }))
+  const pendingWorkApplications = computed(() => sortedMyApplications.value.filter((application) => application.status === "PENDING"))
+  const activeWorkCount = computed(() => activeMyQuests.value.length + activeWorkApplications.value.length)
+  const incomingWorkQuests = computed(() => myQuests.value.filter((quest) => quest.status !== "COMPLETED" && quest.status !== "CANCELLED"))
+  const outgoingWorkApplications = computed(() => sortedMyApplications.value.filter((application) => {
+    return application.status === "PENDING" || application.status === "APPROVED"
+  }))
+  const visibleMyQuests = computed(() => myQuests.value.filter((quest) => quest.status === "OPEN" || quest.status === "WAITING_CONFIRMATION"))
+  const visibleMyApplications = computed(() => pendingWorkApplications.value)
   const recentNewsItems = computed(() => newsItems.value.slice(0, 6))
   const unreadNewsItems = computed(() => newsItems.value.filter((item) => item.readAt === null))
+  const recentIncomingCircleRequests = computed(() => incomingCircleRequests.value.slice(0, 4))
   const questCount = computed(() => sortedQuests.value.length)
   const waitingConfirmationQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "WAITING_CONFIRMATION").length)
   const openQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "OPEN").length)
   const assignedQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "ASSIGNED").length)
-  const activeQuestCount = computed(() => sortedQuests.value.filter((quest) => quest.status === "ASSIGNED" || quest.status === "IN_PROGRESS").length)
+  const activeQuestCount = computed(() => activeWorkCount.value)
   const totalUserCount = computed(() => appUsers.value.length)
   const adminUserCount = computed(() => appUsers.value.filter((user) => user.role === "ADMIN").length)
 
@@ -185,9 +211,10 @@ export const useQuestDashboardState = () => {
   }
 
   const overviewCards = computed(() => [
-    {id: "posted-work" as OverviewFocus, label: "Your work", value: myQuests.value.length, hint: "Quests you manage", tab: "my-quests" as DashboardTab},
-    {id: "applied-tasks" as OverviewFocus, label: "Applied work", value: myApplications.value.length, hint: "Quests you're tracking", tab: "my-applications" as DashboardTab},
-    {id: "completed" as OverviewFocus, label: "Completed", value: myQuests.value.filter((quest) => quest.status === "COMPLETED").length, hint: "Finished quests", tab: "my-quests" as DashboardTab}
+    {id: "active-work" as OverviewFocus, label: "Active work", value: activeWorkCount.value, hint: "Jobs you can act on now", tab: "overview" as DashboardTab},
+    {id: "posted-work" as OverviewFocus, label: "Your jobs", value: visibleMyQuests.value.length, hint: "Jobs you manage", tab: "create-job" as DashboardTab},
+    {id: "applied-tasks" as OverviewFocus, label: "Pending applications", value: visibleMyApplications.value.length, hint: "Jobs waiting for a reply", tab: "find-work" as DashboardTab},
+    {id: "completed" as OverviewFocus, label: "Completed", value: myQuests.value.filter((quest) => quest.status === "COMPLETED").length, hint: "Finished jobs", tab: "create-job" as DashboardTab}
   ])
 
   const applicationsForQuest = (questId: number) => applicationsByQuestId.value[questId] ?? []
@@ -326,7 +353,20 @@ export const useQuestDashboardState = () => {
     isProfileEditDialogOpen.value = false
   }
 
+  const openNotificationsDialog = () => {
+    isNotificationsDialogOpen.value = true
+  }
+
+  const closeNotificationsDialog = () => {
+    isNotificationsDialogOpen.value = false
+  }
+
   const closeQuestDialog = () => {
+    if (questDialogId.value !== null) {
+      delete applicationMessages.value[questDialogId.value]
+      delete proposedPrices.value[questDialogId.value]
+    }
+
     questDialogId.value = null
     cancelEditingQuest()
   }
@@ -334,6 +374,38 @@ export const useQuestDashboardState = () => {
   const closeApplicationDialog = () => {
     applicationDialogId.value = null
     cancelEditingApplication()
+  }
+
+  const openCreateJobDialog = () => {
+    isCreateJobDialogOpen.value = true
+  }
+
+  const closeCreateJobDialog = () => {
+    isCreateJobDialogOpen.value = false
+  }
+
+  const openFindWorkDialog = () => {
+    isFindWorkDialogOpen.value = true
+  }
+
+  const closeFindWorkDialog = () => {
+    isFindWorkDialogOpen.value = false
+  }
+
+  const openOpenWorkDialog = () => {
+    isOpenWorkDialogOpen.value = true
+  }
+
+  const closeOpenWorkDialog = () => {
+    isOpenWorkDialogOpen.value = false
+  }
+
+  const openApplicationsDialog = () => {
+    isApplicationsDialogOpen.value = true
+  }
+
+  const closeApplicationsDialog = () => {
+    isApplicationsDialogOpen.value = false
   }
 
   const scrollQuestDisclosureIntoView = async (questId: number) => {
@@ -491,6 +563,7 @@ export const useQuestDashboardState = () => {
     editQuestAwardAmount.value = String(quest.awardAmount ?? "")
     editQuestScheduledAt.value = formatInstantForInput(quest.scheduledAt)
     editQuestTermFixed.value = quest.termFixed
+    editQuestAudience.value = quest.audience
     editQuestCreatorId.value = String(quest.creatorId)
     editQuestStatus.value = quest.status
     openApplicationsQuestIds.value[quest.id] = false
@@ -504,10 +577,11 @@ export const useQuestDashboardState = () => {
     questAwardAmount.value = String(quest.awardAmount ?? "")
     questScheduledAt.value = formatInstantForInput(quest.scheduledAt)
     questTermFixed.value = quest.termFixed
+    questAudience.value = quest.audience
     questCreatorId.value = isAdmin() ? String(quest.creatorId) : ""
     editingQuestId.value = null
     closeQuestDisclosure(quest.id)
-    goToTab("post-work")
+    goToTab("create-job")
   }
 
   const cancelEditingQuest = () => {
@@ -551,6 +625,7 @@ export const useQuestDashboardState = () => {
     myApplications,
     newsItems,
     unreadNewsCount,
+    incomingCircleRequests,
     appUsers,
     isLoadingQuests,
     isLoadingApplications,
@@ -568,6 +643,7 @@ export const useQuestDashboardState = () => {
     feedbackType,
     copiedDebug,
     isProfileEditDialogOpen,
+    isNotificationsDialogOpen,
     successPulseTarget,
     currentUser,
     isAdmin,
@@ -576,10 +652,13 @@ export const useQuestDashboardState = () => {
     questAwardAmount,
     questScheduledAt,
     questTermFixed,
+    questAudience,
     questCreatorId,
+    questImages,
     profileUsername,
     profileDescription,
     profileAvatarDataUrl,
+    accountCreatedAt,
     myQuestStatusFilter,
     adminQuestStatusFilter,
     applicationMessages,
@@ -594,6 +673,7 @@ export const useQuestDashboardState = () => {
     editQuestAwardAmount,
     editQuestScheduledAt,
     editQuestTermFixed,
+    editQuestAudience,
     editQuestCreatorId,
     editQuestStatus,
     editingApplicationId,
@@ -602,12 +682,18 @@ export const useQuestDashboardState = () => {
     overviewFocus,
     questDialogId,
     applicationDialogId,
+    isCreateJobDialogOpen,
+    isFindWorkDialogOpen,
+    isOpenWorkDialogOpen,
+    isApplicationsDialogOpen,
     questStatusOptions,
+    questAudienceOptions,
     dashboardTabs,
     sortedQuests,
     sortedMyApplications,
     isMyQuest,
     myQuests,
+    activeMyQuests,
     availableQuests,
     adminQuests,
     appliedQuestIds,
@@ -615,8 +701,16 @@ export const useQuestDashboardState = () => {
     filteredAdminQuests,
     recentMyQuests,
     recentMyApplications,
+    activeWorkApplications,
+    pendingWorkApplications,
+    activeWorkCount,
+    incomingWorkQuests,
+    outgoingWorkApplications,
+    visibleMyQuests,
+    visibleMyApplications,
     recentNewsItems,
     unreadNewsItems,
+    recentIncomingCircleRequests,
     questCount,
     waitingConfirmationQuestCount,
     openQuestCount,
@@ -657,8 +751,18 @@ export const useQuestDashboardState = () => {
     clearOverviewFocus,
     openProfileEditDialog,
     closeProfileEditDialog,
+    openNotificationsDialog,
+    closeNotificationsDialog,
     closeQuestDialog,
     closeApplicationDialog,
+    openCreateJobDialog,
+    closeCreateJobDialog,
+    openFindWorkDialog,
+    closeFindWorkDialog,
+    openOpenWorkDialog,
+    closeOpenWorkDialog,
+    openApplicationsDialog,
+    closeApplicationsDialog,
     registerQuestDisclosure,
     closeQuestDisclosure,
     openQuestDisclosure,

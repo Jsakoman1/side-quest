@@ -15,7 +15,7 @@ public class QuestApplicationMgr {
         QuestApplication application = new QuestApplication();
         application.setQuest(quest);
         application.setApplicant(applicant);
-        application.setMessage(dto.getMessage());
+        application.setMessage(dto.getMessage() == null ? null : dto.getMessage().trim());
         application.setProposedPrice(dto.getProposedPrice());
         application.setStatus(QuestApplicationStatus.PENDING);
         return application;
@@ -31,6 +31,7 @@ public class QuestApplicationMgr {
                 .questId(application.getQuest().getId())
                 .questTitle(application.getQuest().getTitle())
                 .questDescription(application.getQuest().getDescription())
+                .questStatus(application.getQuest().getStatus())
                 .applicantId(application.getApplicant().getId())
                 .applicantUsername(application.getApplicant().getUsername())
                 .applicantProfileDescription(application.getApplicant().getProfileDescription())

@@ -2,12 +2,20 @@ import {type QuestDashboardState} from "./useQuestDashboardState.ts"
 import {API_BASE_URL, sidequestApi} from "../api/sidequestApi.ts"
 import {buildRequestDebugInfo} from "../httpDebug.ts"
 import {isAdmin, currentUser} from "../auth.ts"
-import {compressProfileAvatar} from "../shared/imageCompression.ts"
+import {compressImageFile, compressProfileAvatar} from "../shared/imageCompression.ts"
+import {richTextHasContent} from "../shared/richText.ts"
 
 export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const refreshDashboardData = async () => {
     state.resetErrorState()
-    await Promise.all([fetchQuests(), fetchMyApplications(), fetchNews(), fetchNewsUnreadCount(), fetchAppUsers()])
+    await Promise.all([
+      fetchQuests(),
+      fetchMyApplications(),
+      fetchNews(),
+      fetchNewsUnreadCount(),
+      fetchIncomingCircleRequests(),
+      fetchAppUsers()
+    ])
   }
 
   const fetchQuests = async () => {
@@ -63,6 +71,14 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     }
   }
 
+  const fetchIncomingCircleRequests = async () => {
+    try {
+      state.incomingCircleRequests.value = await sidequestApi.getIncomingCircleRequests()
+    } catch {
+      state.incomingCircleRequests.value = []
+    }
+  }
+
   const markNewsAsRead = async () => {
     try {
       await sidequestApi.markMyNewsAsRead()
@@ -112,6 +128,10 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       state.showFeedback("A fixed term needs a date and time.", "error")
       return
     }
+    if (!richTextHasContent(state.questDescription.value)) {
+      state.showFeedback("Quest description is required.", "error")
+      return
+    }
 
     try {
       await sidequestApi.createQuest({
@@ -120,7 +140,9 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
         awardAmount: state.questAwardAmount.value ? Number(state.questAwardAmount.value) : null,
         scheduledAt,
         termFixed: state.questTermFixed.value,
-        creatorId: isAdmin() && state.questCreatorId.value ? Number(state.questCreatorId.value) : undefined
+        audience: state.questAudience.value,
+        creatorId: isAdmin() && state.questCreatorId.value ? Number(state.questCreatorId.value) : undefined,
+        images: [...state.questImages.value]
       })
 
       state.questTitle.value = ""
@@ -128,11 +150,14 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       state.questAwardAmount.value = ""
       state.questScheduledAt.value = ""
       state.questTermFixed.value = false
+      state.questAudience.value = "CIRCLES"
+      state.questImages.value = []
       if (isAdmin() && currentUser.value) {
         state.questCreatorId.value = String(currentUser.value.id)
       }
-      state.triggerSuccessPulse("create-work")
+      state.triggerSuccessPulse("create-job")
       state.showFeedback("Quest created.", "success")
+      state.closeCreateJobDialog()
       await fetchQuests()
     } catch {
       state.showFeedback("Could not create quest.", "error")
@@ -166,6 +191,18 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     if (state.isMyQuest(quest) || isAdmin()) {
       await loadApplicationsForQuest(questId)
     }
+
+    const canApply = quest.status === "OPEN"
+      && !state.isMyQuest(quest)
+      && !isAdmin()
+      && !state.hasAppliedToQuest(quest.id)
+
+    if (canApply) {
+      const suggestedPrice = quest.awardAmount ? String(quest.awardAmount) : ""
+      if (!state.proposedPrices.value[quest.id]?.trim()) {
+        state.proposedPrices.value[quest.id] = suggestedPrice
+      }
+    }
   }
 
   const openApplicationDialog = (applicationId: number) => {
@@ -190,19 +227,51 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       return
     }
 
+    const message = state.applicationMessages.value[questId] ?? ""
+    if (!richTextHasContent(message)) {
+      state.showFeedback("Application message is required.", "error")
+      return
+    }
+
     try {
       await sidequestApi.applyForQuest(questId, {
-        message: state.applicationMessages.value[questId] ?? "",
+        message,
         proposedPrice: state.proposedPrices.value[questId] ? Number(state.proposedPrices.value[questId]) : null
       })
 
       state.applicationMessages.value[questId] = ""
       state.proposedPrices.value[questId] = ""
-      state.showFeedback("Application sent.", "success")
       await fetchMyApplications()
+      state.showFeedback("Application sent. Returning to overview.", "success")
+      state.closeQuestDialog()
+      state.goToTab("overview")
     } catch {
       state.showFeedback("Could not send application.", "error")
     }
+  }
+
+  const addQuestImages = async (files: FileList | null) => {
+    if (!files?.length) {
+      return
+    }
+
+    const slotsLeft = Math.max(0, 10 - state.questImages.value.length)
+    if (slotsLeft === 0) {
+      state.showFeedback("A quest can have at most 10 images.", "error")
+      return
+    }
+
+    const selectedFiles = Array.from(files).slice(0, slotsLeft)
+    try {
+      const compressed = await Promise.all(selectedFiles.map((file) => compressImageFile(file, 1400, 0.84)))
+      state.questImages.value = [...state.questImages.value, ...compressed].slice(0, 10)
+    } catch {
+      state.showFeedback("Could not process one of the quest images.", "error")
+    }
+  }
+
+  const removeQuestImage = (index: number) => {
+    state.questImages.value = state.questImages.value.filter((_, currentIndex) => currentIndex !== index)
   }
 
   const approveApplication = async (questId: number, applicationId: number) => {
@@ -248,7 +317,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await (action === "start" ? sidequestApi.startQuest(questId) : sidequestApi.completeQuest(questId))
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Quest updated.", "success")
-      await Promise.all([fetchQuests(), loadApplicationsForQuest(questId)])
+      await Promise.all([fetchQuests(), fetchMyApplications()])
       return true
     } catch {
       state.showFeedback(`Could not ${action} quest.`, "error")
@@ -275,10 +344,15 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     }
 
     const applicationId = state.editingApplicationId.value
+    const message = state.editApplicationMessage.value
+    if (!richTextHasContent(message)) {
+      state.showFeedback("Application message is required.", "error")
+      return
+    }
 
     try {
       await sidequestApi.updateMyApplication(questId, {
-        message: state.editApplicationMessage.value.trim(),
+        message,
         proposedPrice: state.editApplicationPrice.value ? Number(state.editApplicationPrice.value) : null
       })
 
@@ -304,6 +378,10 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       state.showFeedback("A fixed term needs a date and time.", "error")
       return
     }
+    if (!richTextHasContent(state.editQuestDescription.value)) {
+      state.showFeedback("Quest description is required.", "error")
+      return
+    }
 
     try {
       await sidequestApi.updateQuest(questId, {
@@ -312,6 +390,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
         awardAmount: state.editQuestAwardAmount.value ? Number(state.editQuestAwardAmount.value) : null,
         scheduledAt,
         termFixed: state.editQuestTermFixed.value,
+        audience: state.editQuestAudience.value,
         creatorId: isAdmin() && state.editQuestCreatorId.value ? Number(state.editQuestCreatorId.value) : undefined,
         status: isAdmin() ? state.editQuestStatus.value : undefined
       })
@@ -371,6 +450,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
         username: response.username,
         profileDescription: response.profileDescription,
         profileAvatarDataUrl: response.profileAvatarDataUrl,
+        createdAt: response.createdAt ?? currentUser.value.createdAt,
         role: response.role ?? currentUser.value.role
       }
 
@@ -417,6 +497,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     fetchMyApplications,
     fetchNews,
     fetchNewsUnreadCount,
+    fetchIncomingCircleRequests,
     markNewsAsRead,
     markNewsItemAsRead,
     fetchAppUsers,
@@ -427,6 +508,8 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     applyForQuest,
     approveApplication,
     declineApplication,
+    addQuestImages,
+    removeQuestImage,
     withdrawApplication,
     updateQuestStatus,
     confirmQuestTermChange,
@@ -437,6 +520,10 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     saveProfile,
     updateProfileAvatarFromFile,
     clearProfileAvatar,
+    openCreateJobDialog: state.openCreateJobDialog,
+    closeCreateJobDialog: state.closeCreateJobDialog,
+    openFindWorkDialog: state.openFindWorkDialog,
+    closeFindWorkDialog: state.closeFindWorkDialog,
     init
   }
 }

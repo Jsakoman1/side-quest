@@ -67,6 +67,7 @@ public class AuthController {
                 appUser.getUsername(),
                 appUser.getProfileDescription(),
                 appUser.getProfileAvatarDataUrl(),
+                appUser.getCreatedAt(),
                 resolveRoleName(appUser),
                 token);
     }

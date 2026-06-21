@@ -4,6 +4,7 @@ import com.sidequest.sidequest.dto.QuestRequestDTO;
 import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
+import com.sidequest.sidequest.model.QuestAudience;
 import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestApplication;
 import com.sidequest.sidequest.model.QuestApplicationStatus;
@@ -42,6 +43,9 @@ class QuestServiceTest {
     private QuestNewsService questNewsService;
 
     @Mock
+    private CircleService circleService;
+
+    @Mock
     private QuestMgr questMgr;
 
     @InjectMocks
@@ -69,8 +73,33 @@ class QuestServiceTest {
         assertEquals(10L, result.getId());
         assertEquals(Instant.parse("2026-01-10T10:00:00Z"), mappedQuest.getScheduledAt());
         assertEquals(true, mappedQuest.isTermFixed());
+        assertEquals(QuestAudience.CIRCLES, mappedQuest.getAudience());
         verify(questMgr).toEntity(requestDTO, currentUser);
         verify(questRepository).save(mappedQuest);
+    }
+
+    @Test
+    void getAllQuestsReturnsOnlyVisibleQuestsForNonAdminUsers() {
+        AppUser currentUser = createUser(5L, "viewer");
+        AppUser creator = createUser(6L, "creator");
+
+        Quest visibleQuest = new Quest();
+        visibleQuest.setId(1L);
+        visibleQuest.setCreator(currentUser);
+        visibleQuest.setAudience(QuestAudience.CIRCLES);
+
+        Quest hiddenQuest = new Quest();
+        hiddenQuest.setId(2L);
+        hiddenQuest.setCreator(creator);
+        hiddenQuest.setAudience(QuestAudience.CIRCLES);
+
+        when(questRepository.findAllWithCreator()).thenReturn(List.of(visibleQuest, hiddenQuest));
+        when(circleService.isCircleBetween(currentUser, creator)).thenReturn(false);
+
+        List<Quest> result = questService.getAllQuests(currentUser);
+
+        assertEquals(1, result.size());
+        assertEquals(1L, result.getFirst().getId());
     }
 
     @Test
@@ -147,6 +176,50 @@ class QuestServiceTest {
         when(questRepository.save(quest)).thenReturn(quest);
 
         questService.completeQuest(11L, creator);
+
+        assertEquals(QuestStatus.COMPLETED, quest.getStatus());
+    }
+
+    @Test
+    void startQuestAllowsApprovedApplicantToBeginWork() {
+        AppUser creator = createUser(1L, "creator");
+        AppUser applicant = createUser(2L, "applicant");
+        Quest quest = new Quest();
+        quest.setId(21L);
+        quest.setCreator(creator);
+        quest.setStatus(QuestStatus.ASSIGNED);
+
+        QuestApplication approvedApplication = new QuestApplication();
+        approvedApplication.setId(41L);
+
+        when(questRepository.findByIdWithCreator(21L)).thenReturn(Optional.of(quest));
+        when(questApplicationRepository.findByQuestIdAndApplicantIdAndStatus(21L, 2L, QuestApplicationStatus.APPROVED))
+                .thenReturn(Optional.of(approvedApplication));
+        when(questRepository.save(quest)).thenReturn(quest);
+
+        questService.startQuest(21L, applicant);
+
+        assertEquals(QuestStatus.IN_PROGRESS, quest.getStatus());
+    }
+
+    @Test
+    void completeQuestAllowsApprovedApplicantToFinishWork() {
+        AppUser creator = createUser(1L, "creator");
+        AppUser applicant = createUser(2L, "applicant");
+        Quest quest = new Quest();
+        quest.setId(22L);
+        quest.setCreator(creator);
+        quest.setStatus(QuestStatus.IN_PROGRESS);
+
+        QuestApplication approvedApplication = new QuestApplication();
+        approvedApplication.setId(42L);
+
+        when(questRepository.findByIdWithCreator(22L)).thenReturn(Optional.of(quest));
+        when(questApplicationRepository.findByQuestIdAndApplicantIdAndStatus(22L, 2L, QuestApplicationStatus.APPROVED))
+                .thenReturn(Optional.of(approvedApplication));
+        when(questRepository.save(quest)).thenReturn(quest);
+
+        questService.completeQuest(22L, applicant);
 
         assertEquals(QuestStatus.COMPLETED, quest.getStatus());
     }

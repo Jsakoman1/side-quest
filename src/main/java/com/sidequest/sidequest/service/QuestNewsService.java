@@ -122,6 +122,23 @@ public class QuestNewsService {
         );
     }
 
+    public void notifyCircleRequestAccepted(AppUser recipient, AppUser actor) {
+        if (recipient == null || actor == null) {
+            return;
+        }
+
+        QuestNewsItem item = new QuestNewsItem();
+        item.setRecipientUserId(recipient.getId());
+        item.setActorUserId(actor.getId());
+        item.setActorUsername(actor.getUsername());
+        item.setType(QuestNewsType.CIRCLE_REQUEST_ACCEPTED);
+        item.setTitle("Circle request accepted");
+        item.setMessage(actor.getUsername() + " accepted your circle request.");
+        item.setQuestId(null);
+        item.setQuestTitle("Circles");
+        questNewsRepository.save(item);
+    }
+
     public void notifyQuestEvent(
             AppUser recipient,
             AppUser actor,
@@ -151,8 +168,8 @@ public class QuestNewsService {
         item.setRecipientUserId(recipient.getId());
         item.setActorUserId(actor.getId());
         item.setActorUsername(actor.getUsername());
-        item.setQuestId(quest.getId());
-        item.setQuestTitle(quest.getTitle());
+        item.setQuestId(quest == null ? null : quest.getId());
+        item.setQuestTitle(quest == null ? null : quest.getTitle());
         item.setApplicationId(applicationId);
         item.setType(type);
         item.setTitle(title);
