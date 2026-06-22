@@ -7,6 +7,7 @@ import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
 import {currentUser, isAdmin} from "../auth.ts"
 import {sidequestApi, type AppUser, type CircleRelation, type CircleRequest} from "../api/sidequestApi.ts"
 import {useTimedBanner} from "../composables/useTimedBanner.ts"
+import {formatQuestTerm} from "../shared/questSchedule.ts"
 
 const route = useRoute()
 const router = useRouter()
@@ -48,18 +49,18 @@ const circleActionLabel = computed(() => {
   }
 
   if (isCircle.value) {
-    return "Already in your circles"
+    return "Already connected"
   }
 
   if (hasOutgoingRequestToProfile.value) {
-    return "Circle request sent"
+    return "Invite sent"
   }
 
   if (hasIncomingRequestFromProfile.value) {
     return "Review in Circles"
   }
 
-  return "Send circle invite"
+  return "Send invite"
 })
 const profileLink = computed(() => `${window.location.origin}/users/${profile.value?.id ?? userId.value}`)
 const copied = computed(() => !!copyBanner.message.value)
@@ -109,10 +110,10 @@ const sendCircleRequest = async () => {
   isSendingCircleRequest.value = true
   try {
     await sidequestApi.createCircleRequest({recipientId: profile.value.id})
-    showCircleMessage("Circle request sent.")
+    showCircleMessage("Connection invite sent.")
     await loadCircleRelations()
   } catch {
-    showCircleMessage("Could not send circle request.", "warning")
+    showCircleMessage("Could not send connection invite.", "warning")
   } finally {
     isSendingCircleRequest.value = false
   }
@@ -253,7 +254,7 @@ onMounted(() => {
             <div class="profile-open-quest__top">
               <div class="stack">
                 <strong>{{ quest.title }}</strong>
-                <div class="muted">$ {{ quest.awardAmount }}</div>
+                <div class="muted">$ {{ quest.awardAmount }} · {{ formatQuestTerm(quest.scheduledAt, quest.endsAt, quest.termFixed) }}</div>
               </div>
               <span class="badge badge--accent">Open</span>
             </div>

@@ -7,12 +7,18 @@ import com.sidequest.sidequest.dto.CircleRelationDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
 import com.sidequest.sidequest.dto.CircleRelationStatus;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
+import com.sidequest.sidequest.dto.CircleContactDTO;
+import com.sidequest.sidequest.dto.ConnectionCircleUpdateDTO;
 import com.sidequest.sidequest.mapper.CircleRequestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.model.CircleRequest;
+import com.sidequest.sidequest.model.CircleGroup;
+import com.sidequest.sidequest.model.CircleMembership;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.CircleRequestRepository;
+import com.sidequest.sidequest.repository.CircleMembershipRepository;
+import com.sidequest.sidequest.repository.CircleGroupRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,9 +30,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +46,12 @@ class CircleServiceTest {
 
     @Mock
     private AppUserRepository appUserRepository;
+
+    @Mock
+    private CircleGroupRepository circleGroupRepository;
+
+    @Mock
+    private CircleMembershipRepository circleMembershipRepository;
 
     @Mock
     private CircleRequestMgr circleRequestMgr;
@@ -67,6 +81,8 @@ class CircleServiceTest {
     void getOverviewCombinesCircleCollections() {
         AppUser currentUser = createUser(1L, "requester");
         when(circleRequestRepository.findAcceptedByUserId(1L)).thenReturn(List.of());
+        when(circleGroupRepository.findAllDetailedByOwnerId(1L)).thenReturn(List.of());
+        when(circleMembershipRepository.findByCircleOwnerId(1L)).thenReturn(List.of());
         when(circleRequestRepository.findIncomingPendingByRecipientId(1L)).thenReturn(List.of());
         when(circleRequestRepository.findOutgoingPendingByRequesterId(1L)).thenReturn(List.of());
         when(appUserRepository.findAll()).thenReturn(List.of(currentUser));
@@ -74,6 +90,7 @@ class CircleServiceTest {
         CircleOverviewDTO result = circleService.getOverview(currentUser);
 
         assertEquals(List.of(), result.getCircles());
+        assertEquals(List.of(), result.getConnections());
         assertEquals(List.of(), result.getIncomingRequests());
         assertEquals(List.of(), result.getOutgoingRequests());
         assertEquals(List.of(), result.getInviteCandidates());
@@ -369,6 +386,45 @@ class CircleServiceTest {
 
         assertEquals(CircleRelationStatus.BLOCKED, relation.getRelationStatus());
         assertEquals(true, relation.isBlockedByCurrentUser());
+    }
+
+    @Test
+    void updateConnectionCirclesSavesMembershipAndReturnsUpdatedContact() {
+        AppUser owner = createUser(1L, "owner");
+        AppUser contact = createUser(2L, "contact");
+
+        CircleGroup circle = new CircleGroup();
+        circle.setId(10L);
+        circle.setOwner(owner);
+        circle.setName("Friends");
+
+        CircleRequest relation = new CircleRequest();
+        relation.setId(40L);
+        relation.setRequester(owner);
+        relation.setRecipient(contact);
+        relation.setAcceptedAt(Instant.now());
+
+        CircleMembership savedMembership = new CircleMembership();
+        savedMembership.setCircle(circle);
+        savedMembership.setMember(contact);
+
+        when(appUserRepository.findById(2L)).thenReturn(Optional.of(contact));
+        when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.of(relation));
+        when(circleGroupRepository.findAllByOwnerIdAndIdIn(1L, Set.of(10L))).thenReturn(List.of(circle));
+        when(circleMembershipRepository.findByMemberIdAndCircleOwnerId(2L, 1L))
+                .thenReturn(List.of())
+                .thenReturn(List.of(savedMembership));
+        when(circleMembershipRepository.save(any(CircleMembership.class))).thenReturn(savedMembership);
+
+        CircleContactDTO result = circleService.updateConnectionCircles(
+                2L,
+                ConnectionCircleUpdateDTO.builder().circleIds(List.of(10L)).build(),
+                owner
+        );
+
+        verify(circleMembershipRepository).save(any(CircleMembership.class));
+        assertEquals(List.of(10L), result.getCircleIds());
+        assertEquals(List.of("Friends"), result.getCircleNames());
     }
 
     private AppUser createUser(Long id, String username) {

@@ -12,7 +12,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CircleOverviewDTO {
-    private List<CircleContactDTO> circles;
+    private List<CircleGroupResponseDTO> circles;
+    private List<CircleContactDTO> connections;
     private List<CircleRequestResponseDTO> incomingRequests;
     private List<CircleRequestResponseDTO> outgoingRequests;
     private List<CircleSearchResultDTO> inviteCandidates;

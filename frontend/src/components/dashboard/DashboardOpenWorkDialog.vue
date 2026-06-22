@@ -16,7 +16,7 @@ const waitingQuests = computed(() => props.dashboard.myQuests.filter((quest) => 
   <UiDialog
     :open="dashboard.isOpenWorkDialogOpen"
     title="Open work"
-    subtitle="Jobs that still need agreement or confirmation."
+    subtitle="Jobs that still need a reply or confirmation."
     size="xl"
     @close="dashboard.closeOpenWorkDialog()"
   >

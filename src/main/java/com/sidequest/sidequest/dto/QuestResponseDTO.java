@@ -25,12 +25,16 @@ public class QuestResponseDTO {
     private String description;
 
     private BigDecimal awardAmount;
+    private Integer assigneeTarget;
     private Instant scheduledAt;
+    private Instant endsAt;
     private boolean termFixed;
     private Instant pendingScheduledAt;
+    private Instant pendingEndsAt;
     private Boolean pendingTermFixed;
     private Instant reopenedAt;
     private QuestAudience audience;
+    private List<CircleSummaryDTO> visibleToCircles;
     private List<String> images;
 
     private QuestStatus status;

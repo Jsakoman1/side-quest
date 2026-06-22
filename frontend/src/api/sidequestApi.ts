@@ -1,4 +1,4 @@
-import {api, API_BASE_URL, withAuth} from "./httpClient.ts"
+import {api, withAuth} from "./httpClient.ts"
 import type {
   AppUserRole,
   CircleRelationStatus,
@@ -19,16 +19,20 @@ export interface Quest {
   description: string
   images: string[]
   awardAmount: number
+  assigneeTarget: number | null
   scheduledAt: string | null
+  endsAt: string | null
   termFixed: boolean
   pendingScheduledAt: string | null
+  pendingEndsAt: string | null
   pendingTermFixed: boolean | null
   reopenedAt: string | null
   audience: QuestAudience
+  visibleToCircles: CircleSummary[]
   status: QuestStatus
 }
 
-export interface QuestListResponse {
+interface QuestListResponse {
   items: Quest[]
   page: number
   size: number
@@ -42,6 +46,10 @@ export interface QuestApplication {
   questTitle: string
   questDescription: string
   questStatus: QuestStatus
+  questAssigneeTarget: number | null
+  questScheduledAt: string | null
+  questEndsAt: string | null
+  questTermFixed: boolean
   applicantId: number
   applicantUsername: string
   applicantProfileDescription: string | null
@@ -100,13 +108,51 @@ export interface CircleContact {
   username: string
   profileDescription: string | null
   profileAvatarDataUrl: string | null
+  circleIds: number[]
+  circleNames: string[]
 }
 
-export interface CircleOverview {
-  circles: CircleContact[]
+export interface CircleSummary {
+  id: number
+  name: string
+}
+
+export interface CircleMembership {
+  userId: number
+  username: string
+  profileDescription: string | null
+  profileAvatarDataUrl: string | null
+}
+
+export interface CircleGroup {
+  id: number
+  name: string
+  memberCount: number
+  members: CircleMembership[]
+}
+
+export interface AdminCircleGroup {
+  id: number
+  name: string
+  ownerId: number
+  ownerUsername: string
+  memberCount: number
+  members: CircleMembership[]
+}
+
+interface CircleOverview {
+  circles: CircleGroup[]
+  connections: CircleContact[]
   incomingRequests: CircleRequest[]
   outgoingRequests: CircleRequest[]
   inviteCandidates: CircleCandidate[]
+}
+
+export interface AdminCircleOverview {
+  circles: AdminCircleGroup[]
+  acceptedConnections: CircleRequest[]
+  pendingRequests: CircleRequest[]
+  blockedRelations: CircleRequest[]
 }
 
 export interface QuestNewsItem {
@@ -139,19 +185,22 @@ export interface DashboardSummary {
   adminUserCount: number
 }
 
-export interface QuestRequest {
+interface QuestRequest {
   title: string
   description: string
   images?: string[]
   awardAmount: number | null
+  assigneeTarget?: number | null
   scheduledAt?: string | null
+  endsAt?: string | null
   termFixed?: boolean
   audience?: QuestAudience
+  selectedCircleIds?: number[]
   creatorId?: number
   status?: QuestStatus
 }
 
-export interface QuestSearchRequest {
+interface QuestSearchRequest {
   q?: string
   status?: QuestStatus | null
   audience?: QuestAudience | null
@@ -165,12 +214,12 @@ export interface QuestSearchRequest {
   size?: number
 }
 
-export interface QuestApplicationRequest {
+interface QuestApplicationRequest {
   message: string
   proposedPrice: number | null
 }
 
-export interface AppUserRequest {
+interface AppUserRequest {
   email: string
   username: string
   password?: string
@@ -179,12 +228,20 @@ export interface AppUserRequest {
   role?: AppUserRole
 }
 
-export interface CircleRequestCreate {
+interface CircleRequestCreate {
   recipientId: number
 }
 
-export interface CircleBlockCreate {
+interface CircleBlockCreate {
   blockedUserId: number
+}
+
+interface CircleGroupRequest {
+  name: string
+}
+
+interface ConnectionCircleUpdateRequest {
+  circleIds: number[]
 }
 
 export const sidequestApi = {
@@ -366,5 +423,37 @@ export const sidequestApi = {
 
   async unblockCircleUser(userId: number): Promise<void> {
     await api.delete(`/circles/blocks/${userId}`, withAuth())
+  },
+
+  async createCircle(dto: CircleGroupRequest): Promise<CircleGroup> {
+    return (await api.post("/circles/groups", dto, withAuth())).data
+  },
+
+  async updateCircle(id: number, dto: CircleGroupRequest): Promise<CircleGroup> {
+    return (await api.put(`/circles/groups/${id}`, dto, withAuth())).data
+  },
+
+  async deleteCircle(id: number): Promise<void> {
+    await api.delete(`/circles/groups/${id}`, withAuth())
+  },
+
+  async updateConnectionCircles(userId: number, dto: ConnectionCircleUpdateRequest): Promise<CircleContact> {
+    return (await api.put(`/circles/connections/${userId}/circles`, dto, withAuth())).data
+  },
+
+  async getAdminApplications(): Promise<QuestApplication[]> {
+    return (await api.get<QuestApplication[]>("/admin/applications", withAuth())).data
+  },
+
+  async getAdminCircleOverview(): Promise<AdminCircleOverview> {
+    return (await api.get<AdminCircleOverview>("/circles/admin/overview", withAuth())).data
+  },
+
+  async deleteAdminCircle(id: number): Promise<void> {
+    await api.delete(`/circles/admin/groups/${id}`, withAuth())
+  },
+
+  async deleteAdminCircleRequest(id: number): Promise<void> {
+    await api.delete(`/circles/requests/${id}`, withAuth())
   }
 }

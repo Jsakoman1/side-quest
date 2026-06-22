@@ -1,7 +1,7 @@
 import {api, withAuth} from "./httpClient.ts"
 import type {AppUserRole} from "../shared/sidequestDomain.ts"
 
-export interface AuthResponse {
+interface AuthResponse {
   id: number
   email: string
   username: string
@@ -12,12 +12,12 @@ export interface AuthResponse {
   token: string
 }
 
-export interface LoginRequest {
+interface LoginRequest {
   email: string
   password: string
 }
 
-export interface RegisterRequest {
+interface RegisterRequest {
   email: string
   username: string
   password: string

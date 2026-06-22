@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from "vue"
-import DashboardQuestSummaryRow from "./DashboardQuestSummaryRow.vue"
 import DashboardSectionHeader from "./DashboardSectionHeader.vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
-import {type Quest} from "../../api/sidequestApi.ts"
 import type {QuestAudience} from "../../shared/sidequestDomain.ts"
 import {normalizeSearchQuery} from "../../lib/searchQuery.ts"
 import {buildQuestSearchParams} from "../../lib/questSearch.ts"
@@ -120,36 +118,52 @@ const nextPage = () => {
         <template v-else>
           <UiPagination class="mt-4" :label="`Showing ${pageStart}-${pageEnd} of ${totalItems}`" :has-previous="hasPreviousPage" :has-next="hasNextPage" @previous="previousPage" @next="nextPage" />
 
-          <div class="quest-list mt-4">
-            <button
-              v-for="quest in pagedQuests"
-              :key="quest.id"
-              type="button"
-              class="compact-disclosure compact-disclosure--tight compact-disclosure--launch"
-              :class="[dashboard.statusSurfaceClass(quest.status), { 'ui-pulse': dashboard.successPulseTarget === `quest-${quest.id}` }]"
-              @click="dashboard.openQuestDialog(quest.id)"
-              >
-              <DashboardQuestSummaryRow
-                primary-label="Award"
-                :primary-value="quest.awardAmount"
-                primary-icon="$"
-                money-tone="expense"
-                secondary-label="Term"
-                :secondary-value="dashboard.formatQuestTermLabel(quest)"
-                :title="quest.title"
-                :description="quest.description"
-              >
-                <template #meta>
-                  <span :class="dashboard.statusBadgeClass(quest.status)">{{ dashboard.formatStatus(quest.status) }}</span>
-                  <span v-if="quest.reopenedAt && quest.status === 'OPEN'" class="badge badge--warning">Reopened</span>
-                  <span v-if="quest.status === 'WAITING_CONFIRMATION'" class="badge badge--warning">Awaiting confirmation</span>
-                  <span class="badge badge--accent">{{ quest.creatorUsername }}</span>
-                  <span class="badge badge--secondary">{{ quest.audience === "EVERYONE" ? "Everyone" : "Circles" }}</span>
-                  <span v-if="quest.termFixed" class="badge badge--success">Fixed time</span>
-                  <span v-else class="badge badge--warning">Flexible time</span>
-                </template>
-              </DashboardQuestSummaryRow>
-            </button>
+          <div class="admin-table-shell mt-4">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Creator</th>
+                  <th>Status</th>
+                  <th>Audience</th>
+                  <th>Award</th>
+                  <th>Term</th>
+                  <th>Workers</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="quest in pagedQuests"
+                  :key="quest.id"
+                  :class="{ 'ui-pulse': dashboard.successPulseTarget === `quest-${quest.id}` }"
+                >
+                  <td>
+                    <div class="stack">
+                      <strong>{{ quest.title }}</strong>
+                      <span class="muted text-clamp">{{ quest.description }}</span>
+                    </div>
+                  </td>
+                  <td>{{ quest.creatorUsername }}</td>
+                  <td>
+                    <div class="admin-table__badges">
+                      <span :class="dashboard.statusBadgeClass(quest.status)">{{ dashboard.formatStatus(quest.status) }}</span>
+                      <span v-if="quest.reopenedAt && quest.status === 'OPEN'" class="badge badge--warning">Reopened</span>
+                      <span v-if="quest.status === 'WAITING_CONFIRMATION'" class="badge badge--warning">Awaiting confirmation</span>
+                    </div>
+                  </td>
+                  <td>{{ quest.audience === "EVERYONE" ? "Everyone" : "Circles" }}</td>
+                  <td>$ {{ quest.awardAmount }}</td>
+                  <td>{{ dashboard.formatQuestTermLabel(quest) }}</td>
+                  <td>{{ quest.assigneeTarget === null ? "Unlimited" : quest.assigneeTarget }}</td>
+                  <td>
+                    <div class="admin-table__actions">
+                      <button class="button button--secondary" type="button" @click="dashboard.openQuestDialog(quest.id)">Open</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <UiPagination class="dashboard-find-work__pagination--bottom mt-4" :label="`Page ${currentPage} of ${totalPages}`" :has-previous="hasPreviousPage" :has-next="hasNextPage" @previous="previousPage" @next="nextPage" />

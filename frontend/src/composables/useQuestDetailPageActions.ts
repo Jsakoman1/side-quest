@@ -102,5 +102,3 @@ export const useQuestDetailPageActions = (state: QuestDetailPageState) => {
     init
   }
 }
-
-export type QuestDetailPageActions = ReturnType<typeof useQuestDetailPageActions>

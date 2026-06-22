@@ -32,13 +32,17 @@ export const parseInstantFromInput = (value: string) => {
   return new Date(value).toISOString()
 }
 
-export const formatQuestTerm = (scheduledAt: string | null | undefined, termFixed: boolean) => {
+export const formatQuestTerm = (scheduledAt: string | null | undefined, endsAt: string | null | undefined, termFixed: boolean) => {
   if (!scheduledAt) {
     return termFixed ? "Fixed time not set" : "By agreement"
   }
 
-  return termFixed
-    ? `Fixed for ${formatInstantForDisplay(scheduledAt)}`
-    : `Proposed for ${formatInstantForDisplay(scheduledAt)}`
-}
+  const startLabel = formatInstantForDisplay(scheduledAt)
+  const endLabel = endsAt ? formatInstantForDisplay(endsAt) : null
 
+  if (termFixed) {
+    return endLabel ? `Fixed from ${startLabel} to ${endLabel}` : `Fixed for ${startLabel}`
+  }
+
+  return endLabel ? `Proposed from ${startLabel} to ${endLabel}` : `Proposed for ${startLabel}`
+}

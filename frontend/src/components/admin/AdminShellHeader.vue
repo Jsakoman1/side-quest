@@ -13,6 +13,8 @@ const router = useRouter()
 
 const isQuestsActive = computed(() => route.path.startsWith("/admin/quests"))
 const isUsersActive = computed(() => route.path.startsWith("/admin/users"))
+const isApplicationsActive = computed(() => route.path.startsWith("/admin/applications"))
+const isCirclesActive = computed(() => route.path.startsWith("/admin/circles"))
 
 const goToQuests = () => {
   void router.push("/admin/quests")
@@ -20,6 +22,14 @@ const goToQuests = () => {
 
 const goToUsers = () => {
   void router.push("/admin/users")
+}
+
+const goToApplications = () => {
+  void router.push("/admin/applications")
+}
+
+const goToCircles = () => {
+  void router.push("/admin/circles")
 }
 </script>
 
@@ -52,6 +62,26 @@ const goToUsers = () => {
           @click="goToUsers"
         >
           Users
+        </button>
+        <button
+          class="button button--secondary admin-shell-header__tab"
+          :class="{ 'button--active': isApplicationsActive }"
+          type="button"
+          role="tab"
+          :aria-selected="isApplicationsActive"
+          @click="goToApplications"
+        >
+          Applications
+        </button>
+        <button
+          class="button button--secondary admin-shell-header__tab"
+          :class="{ 'button--active': isCirclesActive }"
+          type="button"
+          role="tab"
+          :aria-selected="isCirclesActive"
+          @click="goToCircles"
+        >
+          Circles
         </button>
       </div>
 

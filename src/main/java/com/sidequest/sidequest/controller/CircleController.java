@@ -6,6 +6,11 @@ import com.sidequest.sidequest.dto.CircleRelationDTO;
 import com.sidequest.sidequest.dto.CircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
+import com.sidequest.sidequest.dto.AdminCircleOverviewDTO;
+import com.sidequest.sidequest.dto.CircleContactDTO;
+import com.sidequest.sidequest.dto.ConnectionCircleUpdateDTO;
+import com.sidequest.sidequest.dto.CircleGroupRequestDTO;
+import com.sidequest.sidequest.dto.CircleGroupResponseDTO;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.service.CircleService;
 import jakarta.validation.Valid;
@@ -25,6 +30,53 @@ public class CircleController {
     @GetMapping("/me/overview")
     public CircleOverviewDTO getOverview(@AuthenticationPrincipal AppUser currentUser) {
         return circleService.getOverview(currentUser);
+    }
+
+    @GetMapping("/admin/overview")
+    public AdminCircleOverviewDTO getAdminOverview(@AuthenticationPrincipal AppUser currentUser) {
+        return circleService.getAdminOverview(currentUser);
+    }
+
+    @PostMapping("/groups")
+    public CircleGroupResponseDTO createCircle(
+            @Valid @RequestBody CircleGroupRequestDTO dto,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return circleService.createCircle(dto, currentUser);
+    }
+
+    @PutMapping("/groups/{id}")
+    public CircleGroupResponseDTO updateCircle(
+            @PathVariable Long id,
+            @Valid @RequestBody CircleGroupRequestDTO dto,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return circleService.updateCircle(id, dto, currentUser);
+    }
+
+    @DeleteMapping("/groups/{id}")
+    public void deleteCircle(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        circleService.deleteCircle(id, currentUser);
+    }
+
+    @DeleteMapping("/admin/groups/{id}")
+    public void deleteCircleAsAdmin(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        circleService.deleteCircleAsAdmin(id, currentUser);
+    }
+
+    @PutMapping("/connections/{userId}/circles")
+    public CircleContactDTO updateConnectionCircles(
+            @PathVariable Long userId,
+            @RequestBody ConnectionCircleUpdateDTO dto,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return circleService.updateConnectionCircles(userId, dto, currentUser);
     }
 
     @GetMapping

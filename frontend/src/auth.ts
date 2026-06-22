@@ -1,11 +1,9 @@
 import {clearSession, currentUser, saveSession, token} from "./services/sessionService.ts"
 import type {SessionUser} from "./services/sessionService.ts"
 
-export type AuthUser = SessionUser
-
 export {currentUser, token}
 
-export const loginUser = (user: AuthUser) => {
+export const loginUser = (user: SessionUser) => {
   saveSession(user)
 }
 

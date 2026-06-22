@@ -11,5 +11,3 @@ export const useQuestDetailPage = () => {
     ...actions
   })
 }
-
-export type QuestDetailPage = ReturnType<typeof useQuestDetailPage>

@@ -53,77 +53,82 @@ const openApplication = async (item: {id: number; applicationId: number | null; 
     query: item.questId !== null ? {questId: String(item.questId)} : undefined
   })
 }
+
+const openItem = (item: {id: number; questId: number | null; applicationId: number | null}) => {
+  if (item.applicationId !== null) {
+    void openApplication(item)
+    return
+  }
+
+  void openQuest(item)
+}
 </script>
 
 <template>
-  <section class="stack dashboard-news-panel dashboard-news-panel--drawer">
-    <div class="dashboard-news__titlebar u-row-between u-items-center u-gap-10">
-      <h2 class="dashboard-news__title">Notifications</h2>
-
-      <div class="button-row">
-        <button class="button button--secondary dashboard-news__mark-all" type="button" @click="feedMode = 'unread'">
-          Unread
-        </button>
-        <button class="button button--secondary dashboard-news__mark-all" type="button" @click="feedMode = 'all'">
-          All recent
-        </button>
-        <button
-          v-if="props.dashboard.unreadNewsCount > 0"
-          class="button button--secondary dashboard-news__mark-all"
-          type="button"
-          @click="props.dashboard.markNewsAsRead()"
-        >
-          Clear all
-        </button>
+  <section class="dashboard-news-panel dashboard-news-panel--drawer">
+    <div class="dashboard-news__header">
+      <div class="dashboard-news__header-copy">
+        <h2 class="dashboard-news__title">Notifications</h2>
       </div>
+
+      <button
+        v-if="props.dashboard.unreadNewsCount > 0"
+        class="dashboard-news__clear"
+        type="button"
+        @click="props.dashboard.markNewsAsRead()"
+      >
+        Mark all read
+      </button>
+    </div>
+
+    <div class="dashboard-news__tabs">
+      <button
+        class="dashboard-news__tab"
+        :class="{ 'dashboard-news__tab--active': feedMode === 'unread' }"
+        type="button"
+        @click="feedMode = 'unread'"
+      >
+        Unread
+      </button>
+      <button
+        class="dashboard-news__tab"
+        :class="{ 'dashboard-news__tab--active': feedMode === 'all' }"
+        type="button"
+        @click="feedMode = 'all'"
+      >
+        Recent
+      </button>
     </div>
 
     <div v-if="props.dashboard.newsError" class="empty-state empty-state--error">
       {{ props.dashboard.newsError }}
     </div>
 
-    <div v-else-if="feedItems.length" class="news-feed news-feed--dialog">
-      <article
+    <div v-else-if="feedItems.length" class="dashboard-news__list">
+      <button
         v-for="item in feedItems"
         :key="item.id"
-        class="news-item news-item--dialog dashboard-news__item"
+        class="dashboard-news__item"
+        :class="{ 'dashboard-news__item--unread': item.isUnread }"
+        type="button"
+        @click="openItem(item)"
       >
-        <div class="news-item__top u-row-between u-items-center u-gap-10">
-          <div class="news-item__badges">
-            <span v-if="item.isUnread" class="badge badge--accent">Unread</span>
+        <div class="dashboard-news__item-dot" :class="item.isUnread ? 'dashboard-news__item-dot--unread' : ''" />
+
+        <div class="dashboard-news__item-main">
+          <div class="dashboard-news__item-top">
             <span :class="['badge', item.badgeClass]">{{ item.typeLabel }}</span>
+            <span class="dashboard-news__item-time">{{ props.dashboard.formatDateTime(item.createdAt) }}</span>
           </div>
-          <span class="news-item__time">{{ props.dashboard.formatDateTime(item.createdAt) }}</span>
-        </div>
 
-        <strong class="news-item__title">{{ item.title }}</strong>
-        <p class="news-item__message">{{ item.message }}</p>
-
-        <div class="news-item__footer u-row-between u-items-center u-wrap u-gap-10">
-          <span class="news-item__meta">
-            {{ item.actorUsername }}<template v-if="item.questTitle"> on {{ item.questTitle }}</template>
-          </span>
-
-          <div class="button-row">
-            <button
-              v-if="item.questId !== null"
-              class="button button--secondary news-item__actions-cta"
-              type="button"
-              @click="openQuest(item)"
-            >
-              Open quest
-            </button>
-            <button
-              v-if="item.applicationId !== null"
-              class="button button--secondary news-item__actions-cta"
-              type="button"
-              @click="openApplication(item)"
-            >
-              Open application
-            </button>
+          <strong class="dashboard-news__item-title">{{ item.title }}</strong>
+          <p class="dashboard-news__item-message">{{ item.message }}</p>
+          <div class="dashboard-news__item-meta">
+            <span>{{ item.actorUsername }}</span>
+            <span v-if="item.questTitle">{{ item.questTitle }}</span>
           </div>
         </div>
-      </article>
+      </button>
     </div>
 
     <div v-else class="empty-state empty-state--soft">

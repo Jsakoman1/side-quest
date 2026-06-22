@@ -1,7 +1,7 @@
 import {computed, ref} from "vue"
 import {getPaginationState} from "../lib/questListPagination.ts"
 
-export type PageResult<T> = {
+type PageResult<T> = {
   items: T[]
   totalItems: number
   totalPages: number
@@ -64,4 +64,3 @@ export const usePaginatedResults = <T>(itemsPerPage: number) => {
     nextPage
   }
 }
-

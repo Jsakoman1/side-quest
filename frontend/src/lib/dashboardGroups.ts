@@ -1,4 +1,4 @@
-export type RailGroup<T> = {
+type RailGroup<T> = {
   key: string
   label: string
   items: T[]
@@ -34,15 +34,40 @@ export const groupByStatus = <T extends {status: string}>(
     }))
 }
 
-export const formatRailDateTime = (value: string | null | undefined) => {
-  if (!value) {
-    return "No scheduled time"
+export const formatRailDateTime = (startValue: string | null | undefined, endValue?: string | null | undefined) => {
+  if (!startValue) {
+    return "By agreement"
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
+  const start = new Date(startValue)
+  const dateLabel = new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
+  }).format(start)
+  const startTimeLabel = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date(value))
+  }).format(start)
+
+  if (!endValue) {
+    return `${dateLabel} · ${startTimeLabel}`
+  }
+
+  const end = new Date(endValue)
+  const sameDay = start.getFullYear() === end.getFullYear()
+    && start.getMonth() === end.getMonth()
+    && start.getDate() === end.getDate()
+  const endLabel = sameDay
+    ? new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(end)
+    : new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(end)
+
+  return `${dateLabel} · ${startTimeLabel}-${endLabel}`
 }

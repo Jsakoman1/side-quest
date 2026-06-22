@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import axios from "axios"
 import {computed, onMounted} from "vue"
 import {currentUser} from "./auth.ts"
 import {authApi} from "./api/authApi.ts"
-import {saveSession, token} from "./services/sessionService.ts"
+import {clearSession, saveSession, token} from "./services/sessionService.ts"
 
 const currentYear = computed(() => new Date().getFullYear())
 
@@ -18,8 +19,10 @@ onMounted(() => {
         ...response,
         token: token.value
       })
-    } catch {
-      // Keep the locally stored session if the refresh fails.
+    } catch (error) {
+      if (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) {
+        clearSession()
+      }
     }
   })()
 })

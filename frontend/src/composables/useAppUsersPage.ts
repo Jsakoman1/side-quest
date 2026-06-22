@@ -11,5 +11,3 @@ export const useAppUsersPage = () => {
     ...actions
   })
 }
-
-export type AppUsersPage = ReturnType<typeof useAppUsersPage>

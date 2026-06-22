@@ -27,21 +27,52 @@ defineEmits<{ discard: [] }>()
           <RichTextEditor v-model="dashboard.editQuestDescription" placeholder="" toolbar-label="Description tools" />
         </label>
         <label class="field dashboard-edit-field">
-          <span class="label">Scheduled time</span>
+          <span class="label">Term</span>
+          <div class="dashboard-term-mode">
+            <button class="segment" :class="{ 'segment--active': dashboard.editQuestTermMode === 'flexible' }" type="button" @click="dashboard.setEditQuestTermMode('flexible')">
+              Flexible
+            </button>
+            <button class="segment" :class="{ 'segment--active': dashboard.editQuestTermMode === 'start-only' }" type="button" @click="dashboard.setEditQuestTermMode('start-only')">
+              Start
+            </button>
+            <button class="segment" :class="{ 'segment--active': dashboard.editQuestTermMode === 'start-end' }" type="button" @click="dashboard.setEditQuestTermMode('start-end')">
+              Start + end
+            </button>
+          </div>
+        </label>
+
+        <label v-if="dashboard.editQuestTermMode !== 'flexible'" class="field dashboard-edit-field">
+          <span class="label">Start</span>
           <input v-model="dashboard.editQuestScheduledAt" class="input" type="datetime-local" />
         </label>
-        <label class="field dashboard-edit-field dashboard-edit-field--toggle">
-          <span class="label">Time type</span>
-          <div class="checkbox-field">
-            <input v-model="dashboard.editQuestTermFixed" type="checkbox" />
-            <span>Fixed term</span>
-          </div>
+
+        <label v-if="dashboard.editQuestTermMode === 'start-end'" class="field dashboard-edit-field">
+          <span class="label">End</span>
+          <input v-model="dashboard.editQuestEndsAt" class="input" type="datetime-local" />
         </label>
         <label class="field dashboard-edit-field">
           <span class="label">Who can see this</span>
           <select v-model="dashboard.editQuestAudience" class="input">
             <option v-for="option in dashboard.questAudienceOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
+        </label>
+        <label v-if="dashboard.editQuestAudience === 'CIRCLES'" class="field dashboard-edit-field">
+          <span class="label">Circles</span>
+          <div v-if="dashboard.circles.length" class="dashboard-create-job__chip-group dashboard-create-job__chip-group--stack">
+            <button
+              v-for="circle in dashboard.circles"
+              :key="circle.id"
+              class="dashboard-create-job__chip dashboard-create-job__chip--wide"
+              :class="{ 'dashboard-create-job__chip--active': dashboard.editQuestSelectedCircleIds.includes(circle.id) }"
+              type="button"
+              @click="dashboard.editQuestSelectedCircleIds = dashboard.editQuestSelectedCircleIds.includes(circle.id)
+                ? dashboard.editQuestSelectedCircleIds.filter((id) => id !== circle.id)
+                : [...dashboard.editQuestSelectedCircleIds, circle.id]"
+            >
+              {{ circle.name }}
+            </button>
+          </div>
+          <div v-else class="muted">Create a circle first.</div>
         </label>
         <template v-if="dashboard.isAdmin()">
           <label class="field dashboard-edit-field">

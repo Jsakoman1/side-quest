@@ -13,8 +13,9 @@ const router = useRouter()
 const register = async () => {
   error.value = ''
   try {
+    const normalizedEmail = email.value.trim().toLowerCase()
     const response = await authApi.register({
-      email: email.value,
+      email: normalizedEmail,
       username: username.value,
       password: password.value
     })

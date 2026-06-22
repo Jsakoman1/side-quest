@@ -49,4 +49,13 @@ public interface CircleRequestRepository extends JpaRepository<CircleRequest, Lo
                or (c.requester.id = :rightUserId and c.recipient.id = :leftUserId)
             """)
     Optional<CircleRequest> findBetweenUsers(Long leftUserId, Long rightUserId);
+
+    @Query("""
+            select c from CircleRequest c
+            join fetch c.requester
+            join fetch c.recipient
+            left join fetch c.blockedBy
+            order by c.createdAt desc
+            """)
+    List<CircleRequest> findAllDetailed();
 }

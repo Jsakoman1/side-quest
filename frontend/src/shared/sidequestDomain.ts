@@ -1,11 +1,11 @@
 const values = <T extends readonly string[]>(...items: T) => items
 
-export const APP_USER_ROLES = values("USER", "ADMIN")
-export const QUEST_AUDIENCES = values("CIRCLES", "EVERYONE")
-export const QUEST_STATUSES = values("OPEN", "ASSIGNED", "WAITING_CONFIRMATION", "IN_PROGRESS", "COMPLETED", "CANCELLED")
-export const QUEST_APPLICATION_STATUSES = values("PENDING", "APPROVED", "DECLINED", "WITHDRAWN")
-export const CIRCLE_RELATION_STATUSES = values("NONE", "CIRCLE", "INCOMING_REQUEST", "OUTGOING_REQUEST", "BLOCKED")
-export const QUEST_NEWS_TYPES = values(
+const APP_USER_ROLES = values("USER", "ADMIN")
+const QUEST_AUDIENCES = values("CIRCLES", "EVERYONE")
+const QUEST_STATUSES = values("OPEN", "ASSIGNED", "WAITING_CONFIRMATION", "IN_PROGRESS", "COMPLETED", "CANCELLED")
+const QUEST_APPLICATION_STATUSES = values("PENDING", "APPROVED", "DECLINED", "WITHDRAWN")
+const CIRCLE_RELATION_STATUSES = values("NONE", "CIRCLE", "INCOMING_REQUEST", "OUTGOING_REQUEST", "BLOCKED")
+const QUEST_NEWS_TYPES = values(
   "APPLICATION_CREATED",
   "APPLICATION_UPDATED",
   "APPLICATION_WITHDRAWN",
@@ -20,9 +20,9 @@ export const QUEST_NEWS_TYPES = values(
   "QUEST_DELETED",
   "CIRCLE_REQUEST_ACCEPTED"
 )
-export const DASHBOARD_TABS = values("overview", "create-job", "find-work", "circles")
-export const OVERVIEW_FOCUSES = values("active-work", "posted-work", "applied-tasks", "completed")
-export const QUEST_SORT_MODES = values("recommended", "newest", "highest")
+const DASHBOARD_TABS = values("overview", "create-job", "find-work", "circles")
+const OVERVIEW_FOCUSES = values("active-work", "posted-work", "applied-tasks", "completed")
+const QUEST_SORT_MODES = values("recommended", "newest", "highest")
 
 export type AppUserRole = typeof APP_USER_ROLES[number]
 export type QuestAudience = typeof QUEST_AUDIENCES[number]
@@ -34,11 +34,6 @@ export type DashboardTab = typeof DASHBOARD_TABS[number]
 export type OverviewFocus = typeof OVERVIEW_FOCUSES[number]
 export type QuestSortMode = typeof QUEST_SORT_MODES[number]
 export type QuestStatusFilter = QuestStatus | "ALL"
-export type QuestReopenState = "REOPENED" | "STANDARD"
-
-export const DEFAULT_APP_USER_ROLE: AppUserRole = "USER"
-export const DEFAULT_QUEST_AUDIENCE: QuestAudience = "CIRCLES"
-export const DEFAULT_QUEST_STATUS: QuestStatus = "OPEN"
 
 export const appUserRoleOptions: Array<{value: AppUserRole; label: string}> = [
   {value: "USER", label: "User"},
@@ -56,7 +51,7 @@ export const questStatusOptions: Array<{value: QuestStatusFilter; label: string}
 ]
 
 export const questAudienceOptions: Array<{value: QuestAudience; label: string; description: string}> = [
-  {value: "CIRCLES", label: "Circles", description: "Visible to your circles by default"},
+  {value: "CIRCLES", label: "Circles", description: "Visible to selected circles"},
   {value: "EVERYONE", label: "Everyone", description: "Visible to everyone on the platform"}
 ]
 
@@ -73,7 +68,7 @@ export const applicationStatusSortOrder: Record<QuestApplicationStatus, number> 
 
 export const circleRelationLabels: Record<CircleRelationStatus, string> = {
   NONE: "Available",
-  CIRCLE: "In circles",
+  CIRCLE: "Connected",
   INCOMING_REQUEST: "Incoming invite",
   OUTGOING_REQUEST: "Invite sent",
   BLOCKED: "Blocked"
@@ -83,5 +78,5 @@ export const dashboardTabs: Array<{id: DashboardTab; title: string; description:
   {id: "overview", title: "Overview", description: ""},
   {id: "create-job", title: "Create job", description: "Post and manage your jobs"},
   {id: "find-work", title: "Find work", description: "Browse open jobs"},
-  {id: "circles", title: "Circles", description: "Your trusted work circle"}
+  {id: "circles", title: "Circles", description: "Organize connections into private work groups"}
 ]

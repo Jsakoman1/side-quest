@@ -12,6 +12,7 @@ import com.sidequest.sidequest.model.QuestApplication;
 import com.sidequest.sidequest.model.QuestStatus;
 import com.sidequest.sidequest.model.QuestApplicationStatus;
 import com.sidequest.sidequest.model.QuestNewsType;
+import com.sidequest.sidequest.model.CircleGroup;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.QuestApplicationRepository;
 import com.sidequest.sidequest.repository.QuestRepository;
@@ -39,13 +40,16 @@ public class QuestService {
     private final QuestMgr questMgr;
 
     public Quest createQuest(QuestRequestDTO dto, AppUser currentUser) {
-        validateQuestCreationTermInput(dto.getScheduledAt(), dto.getTermFixed());
+        validateQuestCreationTermInput(dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
+        validateAssigneeTarget(dto.getAssigneeTarget());
         validateQuestImages(dto.getImages());
         Quest quest = questMgr.toEntity(dto, resolveQuestCreator(dto, currentUser));
         if (quest.getAudience() == null) {
             quest.setAudience(QuestAudience.CIRCLES);
         }
-        applyConfirmedQuestTermFields(quest, dto.getScheduledAt(), dto.getTermFixed());
+        applyQuestVisibilityCircles(quest, dto.getAudience(), dto.getSelectedCircleIds(), quest.getCreator());
+        quest.setAssigneeTarget(normalizeAssigneeTarget(dto.getAssigneeTarget()));
+        applyConfirmedQuestTermFields(quest, dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
         return questRepository.save(quest);
     }
 
@@ -191,6 +195,10 @@ public class QuestService {
         quest.setTitle(dto.getTitle());
         quest.setDescription(dto.getDescription());
         quest.setAwardAmount(dto.getAwardAmount());
+        validateAssigneeTarget(dto.getAssigneeTarget());
+        if (dto.getAssigneeTarget() != null) {
+            quest.setAssigneeTarget(normalizeAssigneeTarget(dto.getAssigneeTarget()));
+        }
         if (dto.getImages() != null) {
             validateQuestImages(dto.getImages());
             quest.setImages(new ArrayList<>(dto.getImages()));
@@ -198,6 +206,7 @@ public class QuestService {
         if (dto.getAudience() != null) {
             quest.setAudience(dto.getAudience());
         }
+        applyQuestVisibilityCircles(quest, quest.getAudience(), dto.getSelectedCircleIds(), quest.getCreator());
 
         if (!isAdmin(currentUser)) {
             applyQuestTermUpdateForOwner(quest, dto, currentUser);
@@ -206,15 +215,16 @@ public class QuestService {
 
         if (dto.getCreatorId() != null) {
             quest.setCreator(requireAppUser(dto.getCreatorId()));
+            applyQuestVisibilityCircles(quest, quest.getAudience(), dto.getSelectedCircleIds(), quest.getCreator());
         }
 
         if (dto.getStatus() != null) {
             applyAdminQuestStatusChange(quest, dto.getStatus(), currentUser);
         }
 
-        if (dto.getScheduledAt() != null || dto.getTermFixed() != null) {
-            validateTermInput(dto.getScheduledAt(), dto.getTermFixed());
-            applyConfirmedQuestTermFields(quest, dto.getScheduledAt(), dto.getTermFixed());
+        if (dto.getScheduledAt() != null || dto.getEndsAt() != null || dto.getTermFixed() != null) {
+            validateTermInput(dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
+            applyConfirmedQuestTermFields(quest, dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
 
             if (quest.getStatus() == QuestStatus.WAITING_CONFIRMATION
                     && (dto.getStatus() == null || dto.getStatus() == QuestStatus.WAITING_CONFIRMATION)) {
@@ -226,26 +236,26 @@ public class QuestService {
     }
 
     private void applyQuestTermUpdateForOwner(Quest quest, QuestRequestDTO dto, AppUser currentUser) {
-        if (dto.getScheduledAt() == null && dto.getTermFixed() == null) {
+        if (dto.getScheduledAt() == null && dto.getEndsAt() == null && dto.getTermFixed() == null) {
             return;
         }
 
-        validateTermInput(dto.getScheduledAt(), dto.getTermFixed());
+        validateTermInput(dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
 
         if (quest.getStatus() == QuestStatus.OPEN || quest.getStatus() == QuestStatus.CANCELLED) {
-            applyConfirmedQuestTermFields(quest, dto.getScheduledAt(), dto.getTermFixed());
+            applyConfirmedQuestTermFields(quest, dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
             clearPendingQuestTermChange(quest);
             return;
         }
 
         if (quest.getStatus() == QuestStatus.WAITING_CONFIRMATION) {
-            applyPendingQuestTermChange(quest, dto.getScheduledAt(), dto.getTermFixed());
+            applyPendingQuestTermChange(quest, dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
             notifyApprovedApplicant(quest, currentUser, QuestNewsType.QUEST_TERM_CONFIRMATION_REQUESTED, "Term change updated", "The pending time for \"" + quest.getTitle() + "\" was updated.");
             return;
         }
 
         if (quest.getStatus() == QuestStatus.ASSIGNED || quest.getStatus() == QuestStatus.IN_PROGRESS) {
-            queueQuestTermChange(quest, dto.getScheduledAt(), dto.getTermFixed());
+            queueQuestTermChange(quest, dto.getScheduledAt(), dto.getEndsAt(), dto.getTermFixed());
             notifyApprovedApplicant(quest, currentUser, QuestNewsType.QUEST_TERM_CONFIRMATION_REQUESTED, "Term confirmation needed", "The owner requested a new time for \"" + quest.getTitle() + "\".");
             return;
         }
@@ -258,7 +268,7 @@ public class QuestService {
                 .orElseThrow(() -> ServiceErrors.notFound("Creator not found with id " + userId));
     }
 
-    private void validateQuestCreationTermInput(Instant scheduledAt, Boolean termFixed) {
+    private void validateQuestCreationTermInput(Instant scheduledAt, Instant endsAt, Boolean termFixed) {
         if (termFixed == null) {
             throw ServiceErrors.badRequest("Term fixed flag is required");
         }
@@ -266,6 +276,8 @@ public class QuestService {
         if (Boolean.TRUE.equals(termFixed) && scheduledAt == null) {
             throw ServiceErrors.badRequest("Scheduled time is required when the term is fixed");
         }
+
+        validateTermRange(scheduledAt, endsAt);
     }
 
     private void validateQuestImages(List<String> images) {
@@ -287,23 +299,66 @@ public class QuestService {
         }
     }
 
-    private void validateTermInput(Instant scheduledAt, Boolean termFixed) {
-        if (scheduledAt != null && termFixed == null) {
-            throw ServiceErrors.badRequest("Term fixed flag is required when providing a scheduled time");
+    private void validateAssigneeTarget(Integer assigneeTarget) {
+        if (assigneeTarget != null && assigneeTarget < 1) {
+            throw ServiceErrors.badRequest("Assignee target must be at least 1 when provided");
+        }
+    }
+
+    private Integer normalizeAssigneeTarget(Integer assigneeTarget) {
+        return assigneeTarget == null ? 1 : assigneeTarget;
+    }
+
+    private void applyQuestVisibilityCircles(Quest quest, QuestAudience audience, List<Long> selectedCircleIds, AppUser owner) {
+        if (audience != QuestAudience.CIRCLES) {
+            quest.getVisibleToCircles().clear();
+            return;
+        }
+
+        if (selectedCircleIds == null) {
+            return;
+        }
+
+        List<CircleGroup> selectedCircles = questVisibilityService.getVisibleCircles(owner, selectedCircleIds);
+        if (selectedCircleIds.size() != selectedCircles.size()) {
+            throw ServiceErrors.badRequest("One or more selected circles are invalid");
+        }
+
+        quest.getVisibleToCircles().clear();
+        quest.getVisibleToCircles().addAll(selectedCircles);
+    }
+
+    private void validateTermInput(Instant scheduledAt, Instant endsAt, Boolean termFixed) {
+        if ((scheduledAt != null || endsAt != null) && termFixed == null) {
+            throw ServiceErrors.badRequest("Term fixed flag is required when providing a time");
         }
 
         if (Boolean.TRUE.equals(termFixed) && scheduledAt == null) {
             throw ServiceErrors.badRequest("Scheduled time is required when the term is fixed");
         }
+
+        if (endsAt != null && scheduledAt == null) {
+            throw ServiceErrors.badRequest("Start time is required when providing an end time");
+        }
+
+        validateTermRange(scheduledAt, endsAt);
     }
 
-    private void applyConfirmedQuestTermFields(Quest quest, Instant scheduledAt, Boolean termFixed) {
+    private void validateTermRange(Instant scheduledAt, Instant endsAt) {
+        if (scheduledAt != null && endsAt != null && !endsAt.isAfter(scheduledAt)) {
+            throw ServiceErrors.badRequest("End time must be after the start time");
+        }
+    }
+
+    private void applyConfirmedQuestTermFields(Quest quest, Instant scheduledAt, Instant endsAt, Boolean termFixed) {
         quest.setScheduledAt(scheduledAt);
+        quest.setEndsAt(endsAt);
         quest.setTermFixed(Boolean.TRUE.equals(termFixed));
     }
 
-    private void applyPendingQuestTermChange(Quest quest, Instant scheduledAt, Boolean termFixed) {
+    private void applyPendingQuestTermChange(Quest quest, Instant scheduledAt, Instant endsAt, Boolean termFixed) {
         quest.setPendingScheduledAt(scheduledAt);
+        quest.setPendingEndsAt(endsAt);
         quest.setPendingTermFixed(termFixed);
     }
 
@@ -322,14 +377,15 @@ public class QuestService {
         }
     }
 
-    private void queueQuestTermChange(Quest quest, Instant scheduledAt, Boolean termFixed) {
-        applyPendingQuestTermChange(quest, scheduledAt, termFixed);
+    private void queueQuestTermChange(Quest quest, Instant scheduledAt, Instant endsAt, Boolean termFixed) {
+        applyPendingQuestTermChange(quest, scheduledAt, endsAt, termFixed);
         quest.setTermChangePreviousStatus(quest.getStatus());
         quest.setStatus(QuestStatus.WAITING_CONFIRMATION);
     }
 
     private void clearPendingQuestTermChange(Quest quest) {
         quest.setPendingScheduledAt(null);
+        quest.setPendingEndsAt(null);
         quest.setPendingTermFixed(null);
         quest.setTermChangePreviousStatus(null);
     }
@@ -376,9 +432,9 @@ public class QuestService {
             return;
         }
 
-        approvedApplications.stream()
-                .findFirst()
-                .ifPresent(application -> questNewsService.notifyQuestEvent(application.getApplicant(), actor, quest, null, type, title, message));
+        for (QuestApplication application : approvedApplications) {
+            questNewsService.notifyQuestEvent(application.getApplicant(), actor, quest, null, type, title, message);
+        }
     }
 
     private void notifyQuestCreator(Quest quest, AppUser actor, QuestNewsType type, String title, String message) {
@@ -405,11 +461,12 @@ public class QuestService {
             throw ServiceErrors.badRequest("Quest term change is not waiting for confirmation");
         }
 
-        if (quest.getPendingTermFixed() == null && quest.getPendingScheduledAt() == null) {
+        if (quest.getPendingTermFixed() == null && quest.getPendingScheduledAt() == null && quest.getPendingEndsAt() == null) {
             throw ServiceErrors.badRequest("No pending term change to confirm");
         }
 
         quest.setScheduledAt(quest.getPendingScheduledAt());
+        quest.setEndsAt(quest.getPendingEndsAt());
         quest.setTermFixed(Boolean.TRUE.equals(quest.getPendingTermFixed()));
         restoreQuestStatusAfterTermDecision(quest);
         clearPendingQuestTermChange(quest);

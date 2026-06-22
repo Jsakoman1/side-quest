@@ -25,9 +25,12 @@ public class QuestRequestDTO {
     private @NotBlank @Size(max = 255) String title;
     private @NotBlank @Size(max = 2000) String description;
     private @NotNull @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal awardAmount;
+    private Integer assigneeTarget;
     private Instant scheduledAt;
+    private Instant endsAt;
     private Boolean termFixed;
     private QuestAudience audience;
+    private List<Long> selectedCircleIds;
     private Long creatorId;
     private QuestStatus status;
     private @Size(max = 10) List<String> images;

@@ -22,10 +22,12 @@ type CalendarEntry = {
   questId: number
   title: string
   scheduledAt: string | null
+  endsAt: string | null
   timeLabel: string
   minuteOfDay: number
   dateKey: string
   kind: "incoming" | "outgoing"
+  hasRange: boolean
 }
 
 type MonthCell = {
@@ -106,10 +108,12 @@ const calendarEntries = computed<CalendarEntry[]>(() => {
       questId: quest.id,
       title: quest.title,
       scheduledAt: quest.scheduledAt ?? null,
-      timeLabel: formatTimeLabel(quest.scheduledAt),
+      endsAt: quest.endsAt ?? null,
+      timeLabel: formatTimeLabel(quest.scheduledAt, quest.endsAt),
       minuteOfDay,
       dateKey,
-      kind: "incoming"
+      kind: "incoming",
+      hasRange: !!quest.endsAt
     })
   }
 
@@ -127,10 +131,12 @@ const calendarEntries = computed<CalendarEntry[]>(() => {
       questId: application.questId,
       title: application.questTitle,
       scheduledAt: quest?.scheduledAt ?? null,
-      timeLabel: formatTimeLabel(quest?.scheduledAt),
+      endsAt: quest?.endsAt ?? null,
+      timeLabel: formatTimeLabel(quest?.scheduledAt, quest?.endsAt),
       minuteOfDay,
       dateKey,
-      kind: "outgoing"
+      kind: "outgoing",
+      hasRange: !!quest?.endsAt
     })
   }
 
@@ -191,10 +197,12 @@ const flexibleItems = computed(() => {
         questId: quest.id,
         title: quest.title,
         scheduledAt: null,
+        endsAt: null,
         timeLabel: "All day",
         minuteOfDay: 0,
         dateKey: "flexible",
-        kind: "incoming"
+        kind: "incoming",
+        hasRange: false
       })
     }
   }
@@ -207,10 +215,12 @@ const flexibleItems = computed(() => {
         questId: application.questId,
         title: application.questTitle,
         scheduledAt: null,
+        endsAt: null,
         timeLabel: "All day",
         minuteOfDay: 0,
         dateKey: "flexible",
-        kind: "outgoing"
+        kind: "outgoing",
+        hasRange: false
       })
     }
   }
@@ -281,7 +291,8 @@ const openCreateOnSelectedDay = () => {
   const createDate = new Date(selectedDay.value)
   createDate.setHours(9, 0, 0, 0)
   props.dashboard.questScheduledAt = formatInstantForInput(createDate.toISOString())
-  props.dashboard.questTermFixed = true
+  props.dashboard.questEndsAt = ""
+  props.dashboard.setQuestTermMode("start-only")
   props.dashboard.openCreateJobDialog()
   closeDayDialog()
 }
@@ -349,7 +360,7 @@ const openItem = (questId: number) => {
               v-for="item in cell.items.slice(0, 2)"
               :key="item.id"
               class="calendar-event calendar-event--month"
-              :class="[item.kind === 'incoming' ? 'calendar-event--incoming' : 'calendar-event--outgoing', { 'calendar-event--muted': cell.isPast }]"
+              :class="[item.kind === 'incoming' ? 'calendar-event--incoming' : 'calendar-event--outgoing', { 'calendar-event--muted': cell.isPast, 'calendar-event--range': item.hasRange }]"
               type="button"
               @click.stop="openItem(item.questId)"
             >
@@ -401,7 +412,7 @@ const openItem = (questId: number) => {
             v-for="item in selectedDayItems"
             :key="item.id"
             class="calendar-event calendar-event--dialog"
-            :class="[item.kind === 'incoming' ? 'calendar-event--incoming' : 'calendar-event--outgoing']"
+            :class="[item.kind === 'incoming' ? 'calendar-event--incoming' : 'calendar-event--outgoing', { 'calendar-event--range': item.hasRange }]"
             type="button"
             @click="openItem(item.questId)"
           >

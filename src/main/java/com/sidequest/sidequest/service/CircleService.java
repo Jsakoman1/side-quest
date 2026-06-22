@@ -8,26 +8,44 @@ import com.sidequest.sidequest.dto.CircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleContactDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
+import com.sidequest.sidequest.dto.AdminCircleOverviewDTO;
+import com.sidequest.sidequest.dto.AdminCircleGroupResponseDTO;
+import com.sidequest.sidequest.dto.ConnectionCircleUpdateDTO;
+import com.sidequest.sidequest.dto.CircleMemberDTO;
+import com.sidequest.sidequest.dto.CircleGroupRequestDTO;
+import com.sidequest.sidequest.dto.CircleGroupResponseDTO;
 import com.sidequest.sidequest.mapper.CircleRequestMgr;
 import com.sidequest.sidequest.model.AppUser;
+import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.model.CircleRequest;
+import com.sidequest.sidequest.model.CircleGroup;
+import com.sidequest.sidequest.model.CircleMembership;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.repository.CircleRequestRepository;
+import com.sidequest.sidequest.repository.CircleMembershipRepository;
+import com.sidequest.sidequest.repository.CircleGroupRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class CircleService {
     private final CircleRequestRepository circleRequestRepository;
     private final AppUserRepository appUserRepository;
+    private final CircleGroupRepository circleGroupRepository;
+    private final CircleMembershipRepository circleMembershipRepository;
     private final CircleRequestMgr circleRequestMgr;
     private final QuestNewsService questNewsService;
 
@@ -38,25 +56,80 @@ public class CircleService {
                 .toList();
     }
 
+    public AdminCircleOverviewDTO getAdminOverview(AppUser currentUser) {
+        validateAdmin(currentUser);
+
+        List<CircleRequest> relations = circleRequestRepository.findAllDetailed();
+        return AdminCircleOverviewDTO.builder()
+                .circles(getAllCirclesForAdmin())
+                .acceptedConnections(relations.stream()
+                        .filter(relation -> relation.getAcceptedAt() != null && relation.getBlockedAt() == null)
+                        .map(circleRequestMgr::toDto)
+                        .toList())
+                .pendingRequests(relations.stream()
+                        .filter(relation -> relation.getAcceptedAt() == null && relation.getBlockedAt() == null)
+                        .map(circleRequestMgr::toDto)
+                        .toList())
+                .blockedRelations(relations.stream()
+                        .filter(relation -> relation.getBlockedAt() != null)
+                        .map(circleRequestMgr::toDto)
+                        .toList())
+                .build();
+    }
+
     public CircleOverviewDTO getOverview(AppUser currentUser) {
         return CircleOverviewDTO.builder()
-                .circles(getCircleContacts(currentUser))
+                .circles(getCircles(currentUser))
+                .connections(getConnections(currentUser))
                 .incomingRequests(getIncomingRequests(currentUser))
                 .outgoingRequests(getOutgoingRequests(currentUser))
                 .inviteCandidates(getInviteCandidates(currentUser))
                 .build();
     }
 
-    private List<CircleContactDTO> getCircleContacts(AppUser currentUser) {
-        return circleRequestRepository.findAcceptedByUserId(currentUser.getId()).stream()
-                .map(relation -> toContact(currentUser, relation))
+    public List<CircleGroupResponseDTO> getCircles(AppUser currentUser) {
+        return circleGroupRepository.findAllDetailedByOwnerId(currentUser.getId()).stream()
+                .map(this::toCircleDto)
                 .toList();
     }
 
-    private CircleContactDTO toContact(AppUser currentUser, CircleRequest relation) {
+    public List<AdminCircleGroupResponseDTO> getAllCirclesForAdmin() {
+        return circleGroupRepository.findAllDetailed().stream()
+                .map(circle -> AdminCircleGroupResponseDTO.builder()
+                        .id(circle.getId())
+                        .name(circle.getName())
+                        .ownerId(circle.getOwner().getId())
+                        .ownerUsername(circle.getOwner().getUsername())
+                        .memberCount(circle.getMemberships().size())
+                        .members(circle.getMemberships().stream()
+                                .map(CircleMembership::getMember)
+                                .sorted(Comparator.comparing(AppUser::getUsername, String.CASE_INSENSITIVE_ORDER))
+                                .map(member -> CircleMemberDTO.builder()
+                                        .userId(member.getId())
+                                        .username(member.getUsername())
+                                        .profileDescription(member.getProfileDescription())
+                                        .profileAvatarDataUrl(member.getProfileAvatarDataUrl())
+                                        .build())
+                                .toList())
+                        .build())
+                .toList();
+    }
+
+    public List<CircleContactDTO> getConnections(AppUser currentUser) {
+        Map<Long, List<CircleMembership>> membershipsByUserId = circleMembershipRepository.findByCircleOwnerId(currentUser.getId())
+                .stream()
+                .collect(Collectors.groupingBy(membership -> membership.getMember().getId()));
+
+        return circleRequestRepository.findAcceptedByUserId(currentUser.getId()).stream()
+                .map(relation -> toContact(currentUser, relation, membershipsByUserId))
+                .toList();
+    }
+
+    private CircleContactDTO toContact(AppUser currentUser, CircleRequest relation, Map<Long, List<CircleMembership>> membershipsByUserId) {
         AppUser contact = relation.getRequester().getId().equals(currentUser.getId())
                 ? relation.getRecipient()
                 : relation.getRequester();
+        List<CircleMembership> memberships = membershipsByUserId.getOrDefault(contact.getId(), List.of());
 
         return CircleContactDTO.builder()
                 .relationId(relation.getId())
@@ -64,6 +137,28 @@ public class CircleService {
                 .username(contact.getUsername())
                 .profileDescription(contact.getProfileDescription())
                 .profileAvatarDataUrl(contact.getProfileAvatarDataUrl())
+                .circleIds(memberships.stream().map(membership -> membership.getCircle().getId()).toList())
+                .circleNames(memberships.stream().map(membership -> membership.getCircle().getName()).toList())
+                .build();
+    }
+
+    private CircleGroupResponseDTO toCircleDto(CircleGroup circle) {
+        List<CircleMemberDTO> members = circle.getMemberships().stream()
+                .map(CircleMembership::getMember)
+                .sorted(Comparator.comparing(AppUser::getUsername, String.CASE_INSENSITIVE_ORDER))
+                .map(member -> CircleMemberDTO.builder()
+                        .userId(member.getId())
+                        .username(member.getUsername())
+                        .profileDescription(member.getProfileDescription())
+                        .profileAvatarDataUrl(member.getProfileAvatarDataUrl())
+                        .build())
+                .toList();
+
+        return CircleGroupResponseDTO.builder()
+                .id(circle.getId())
+                .name(circle.getName())
+                .memberCount(members.size())
+                .members(members)
                 .build();
     }
 
@@ -156,6 +251,11 @@ public class CircleService {
 
     @Transactional
     public void deleteCircleRequest(Long requestId, AppUser currentUser) {
+        if (isAdmin(currentUser)) {
+            circleRequestRepository.delete(requireRequest(requestId));
+            return;
+        }
+
         CircleRequest circleRequest = requireRequestAccessibleByCurrentUser(requestId, currentUser);
         circleRequestRepository.delete(circleRequest);
     }
@@ -219,6 +319,113 @@ public class CircleService {
                 .orElse(false);
     }
 
+    public boolean isCircleMember(Long circleId, Long memberUserId) {
+        return circleMembershipRepository.existsByCircleIdAndMemberId(circleId, memberUserId);
+    }
+
+    public List<CircleGroup> getOwnedCirclesByIds(AppUser owner, List<Long> circleIds) {
+        if (circleIds == null || circleIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<CircleGroup> circles = circleGroupRepository.findAllByOwnerIdAndIdIn(owner.getId(), circleIds);
+        if (circles.size() != new LinkedHashSet<>(circleIds).size()) {
+            throw ServiceErrors.badRequest("One or more selected circles are invalid");
+        }
+
+        return circles;
+    }
+
+    @Transactional
+    public CircleGroupResponseDTO createCircle(CircleGroupRequestDTO dto, AppUser currentUser) {
+        String normalizedName = normalizeCircleName(dto.getName());
+        if (circleGroupRepository.existsByOwnerIdAndNameIgnoreCase(currentUser.getId(), normalizedName)) {
+            throw ServiceErrors.conflict("You already have a circle with this name");
+        }
+
+        CircleGroup circle = new CircleGroup();
+        circle.setOwner(currentUser);
+        circle.setName(normalizedName);
+        return toCircleDto(circleGroupRepository.save(circle));
+    }
+
+    @Transactional
+    public CircleGroupResponseDTO updateCircle(Long circleId, CircleGroupRequestDTO dto, AppUser currentUser) {
+        CircleGroup circle = requireCircleOwnedByCurrentUser(circleId, currentUser);
+        String normalizedName = normalizeCircleName(dto.getName());
+
+        if (!circle.getName().equalsIgnoreCase(normalizedName)
+                && circleGroupRepository.existsByOwnerIdAndNameIgnoreCase(currentUser.getId(), normalizedName)) {
+            throw ServiceErrors.conflict("You already have a circle with this name");
+        }
+
+        circle.setName(normalizedName);
+        return toCircleDto(circleGroupRepository.save(circle));
+    }
+
+    @Transactional
+    public void deleteCircle(Long circleId, AppUser currentUser) {
+        CircleGroup circle = requireCircleOwnedByCurrentUser(circleId, currentUser);
+        circleGroupRepository.delete(circle);
+    }
+
+    @Transactional
+    public void deleteCircleAsAdmin(Long circleId, AppUser currentUser) {
+        validateAdmin(currentUser);
+
+        CircleGroup circle = circleGroupRepository.findById(circleId)
+                .orElseThrow(() -> ServiceErrors.notFound("Circle not found with id " + circleId));
+        circleGroupRepository.delete(circle);
+    }
+
+    @Transactional
+    public CircleContactDTO updateConnectionCircles(Long userId, ConnectionCircleUpdateDTO dto, AppUser currentUser) {
+        AppUser contact = requireAppUser(userId);
+        if (!isCircleBetween(currentUser, contact)) {
+            throw ServiceErrors.badRequest("You can only organize connected users into circles");
+        }
+
+        Set<Long> requestedCircleIds = dto.getCircleIds() == null ? Set.of() : new LinkedHashSet<>(dto.getCircleIds());
+        List<CircleGroup> requestedCircles = requestedCircleIds.isEmpty()
+                ? List.of()
+                : circleGroupRepository.findAllByOwnerIdAndIdIn(currentUser.getId(), requestedCircleIds);
+
+        if (requestedCircles.size() != requestedCircleIds.size()) {
+            throw ServiceErrors.badRequest("One or more selected circles are invalid");
+        }
+
+        Map<Long, CircleGroup> requestedCircleById = requestedCircles.stream()
+                .collect(Collectors.toMap(CircleGroup::getId, Function.identity()));
+
+        List<CircleMembership> existingMemberships = circleMembershipRepository.findByMemberIdAndCircleOwnerId(contact.getId(), currentUser.getId());
+        Map<Long, CircleMembership> existingByCircleId = existingMemberships.stream()
+                .collect(Collectors.toMap(membership -> membership.getCircle().getId(), Function.identity()));
+
+        for (CircleMembership membership : existingMemberships) {
+            if (!requestedCircleIds.contains(membership.getCircle().getId())) {
+                circleMembershipRepository.delete(membership);
+            }
+        }
+
+        for (Long circleId : requestedCircleIds) {
+            if (existingByCircleId.containsKey(circleId)) {
+                continue;
+            }
+
+            CircleMembership membership = new CircleMembership();
+            membership.setCircle(requestedCircleById.get(circleId));
+            membership.setMember(contact);
+            circleMembershipRepository.save(membership);
+        }
+
+        CircleRequest relation = findRelation(currentUser, contact)
+                .orElseThrow(() -> ServiceErrors.notFound("Connection not found"));
+        Map<Long, List<CircleMembership>> membershipsByUserId = circleMembershipRepository.findByMemberIdAndCircleOwnerId(contact.getId(), currentUser.getId())
+                .stream()
+                .collect(Collectors.groupingBy(membership -> membership.getMember().getId()));
+        return toContact(currentUser, relation, membershipsByUserId);
+    }
+
     private CircleRequest requireIncomingRequest(Long requestId, AppUser currentUser) {
         CircleRequest circleRequest = requireRequest(requestId);
         if (!circleRequest.getRecipient().getId().equals(currentUser.getId())) {
@@ -274,6 +481,34 @@ public class CircleService {
 
     private Optional<CircleRequest> findRelation(AppUser leftUser, AppUser rightUser) {
         return circleRequestRepository.findBetweenUsers(leftUser.getId(), rightUser.getId());
+    }
+
+    private CircleGroup requireCircleOwnedByCurrentUser(Long circleId, AppUser currentUser) {
+        return circleGroupRepository.findByIdAndOwnerId(circleId, currentUser.getId())
+                .orElseThrow(() -> ServiceErrors.notFound("Circle not found with id " + circleId));
+    }
+
+    private String normalizeCircleName(String name) {
+        if (name == null) {
+            throw ServiceErrors.badRequest("Circle name is required");
+        }
+
+        String normalized = name.trim();
+        if (normalized.isBlank()) {
+            throw ServiceErrors.badRequest("Circle name is required");
+        }
+
+        return normalized;
+    }
+
+    private void validateAdmin(AppUser currentUser) {
+        if (!isAdmin(currentUser)) {
+            throw ServiceErrors.forbidden("Admin access is required");
+        }
+    }
+
+    private boolean isAdmin(AppUser currentUser) {
+        return currentUser != null && currentUser.getRole() == AppUserRole.ADMIN;
     }
 
     private CircleSearchResultDTO toSearchResult(AppUser currentUser, AppUser candidate) {

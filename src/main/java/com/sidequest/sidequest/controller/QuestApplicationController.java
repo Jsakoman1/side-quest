@@ -37,6 +37,11 @@ public class QuestApplicationController {
         return questApplicationService.getApplicationsForApplicant(currentUser);
     }
 
+    @GetMapping("/admin/applications")
+    public List<QuestApplicationResponseDTO> getAllApplicationsForAdmin(@AuthenticationPrincipal AppUser currentUser) {
+        return questApplicationService.getAllApplicationsForAdmin(currentUser);
+    }
+
     @PutMapping("/quests/{questId}/applications/me")
     public QuestApplicationResponseDTO updateMyApplication(
             @PathVariable Long questId,

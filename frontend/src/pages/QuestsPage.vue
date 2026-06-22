@@ -4,7 +4,6 @@ import {useRouter} from "vue-router"
 import DashboardFindQuests from "../components/dashboard/DashboardFindQuests.vue"
 import DashboardMyQuests from "../components/dashboard/DashboardMyQuests.vue"
 import DashboardOverview from "../components/dashboard/DashboardOverview.vue"
-import DashboardNews from "../components/dashboard/DashboardNews.vue"
 import DashboardPostWork from "../components/dashboard/DashboardPostWork.vue"
 import DashboardApplicationsDialog from "../components/dashboard/DashboardApplicationsDialog.vue"
 import DashboardOpenWorkDialog from "../components/dashboard/DashboardOpenWorkDialog.vue"
@@ -12,6 +11,7 @@ import DashboardSidebar from "../components/dashboard/DashboardSidebar.vue"
 import DashboardQuestDialog from "../components/dashboard/DashboardQuestDialog.vue"
 import DashboardApplicationDialog from "../components/dashboard/DashboardApplicationDialog.vue"
 import DashboardProfileDialog from "../components/dashboard/DashboardProfileDialog.vue"
+import UserProfileDialog from "../components/profile/UserProfileDialog.vue"
 import UiDialog from "../components/ui/UiDialog.vue"
 import UiRequestError from "../components/ui/UiRequestError.vue"
 import UiToast from "../components/ui/UiToast.vue"
@@ -70,34 +70,32 @@ onMounted(dashboard.init)
         </section>
 
         <DashboardProfileDialog :dashboard="dashboard" />
-
-        <UiDialog
-          :open="dashboard.isNotificationsDialogOpen"
-          title=""
-          position="drawer"
-          @close="dashboard.closeNotificationsDialog"
-        >
-          <DashboardNews :dashboard="dashboard" />
-        </UiDialog>
+        <UserProfileDialog
+          :open="dashboard.userProfileDialogId !== null"
+          :user-id="dashboard.userProfileDialogId"
+          @close="dashboard.closeUserProfileDialog()"
+          @edit-profile="dashboard.openProfileEditDialog()"
+          @open-quest="(questId) => { dashboard.closeUserProfileDialog(); void dashboard.openQuestDialog(questId) }"
+        />
 
         <UiDialog
           :open="dashboard.isCreateJobDialogOpen"
           title="Create job"
-          subtitle="Draft a job and publish it."
           size="xl"
           @close="dashboard.closeCreateJobDialog()"
         >
-          <DashboardPostWork :dashboard="dashboard" />
+          <DashboardPostWork :dashboard="dashboard" :boxed="false" />
         </UiDialog>
 
         <UiDialog
           :open="dashboard.isFindWorkDialogOpen"
           title="Find work"
-          subtitle="Browse open jobs."
+          subtitle="Filter open jobs and open the ones you want."
           size="xl"
+          :default-expanded="true"
           @close="dashboard.closeFindWorkDialog()"
         >
-          <DashboardFindQuests :dashboard="dashboard" :show-header="false" />
+          <DashboardFindQuests :dashboard="dashboard" :show-header="false" :boxed="false" />
         </UiDialog>
 
         <DashboardApplicationsDialog :dashboard="dashboard" />

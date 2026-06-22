@@ -124,5 +124,3 @@ export const useAppUsersPageActions = (state: AppUsersPageState) => {
     isAdmin
   }
 }
-
-export type AppUsersPageActions = ReturnType<typeof useAppUsersPageActions>

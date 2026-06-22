@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue"
-import {richTextHasContent, sanitizeRichTextHtml} from "../../shared/richText.ts"
 import {renderProfileText} from "../../shared/profileFormatting.ts"
 import {compressImageFile} from "../../shared/imageCompression.ts"
+import {richTextHasContent, sanitizeRichTextHtml} from "../../shared/richText.ts"
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -18,10 +18,29 @@ const emit = defineEmits<{
   (event: "update:modelValue", value: string): void
 }>()
 
+type CommandState = {
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  unorderedList: boolean
+  orderedList: boolean
+  quote: boolean
+  hasLink: boolean
+}
+
 const editorRef = ref<HTMLElement | null>(null)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const isFocused = ref(false)
 const savedRange = ref<Range | null>(null)
+const commandState = ref<CommandState>({
+  bold: false,
+  italic: false,
+  underline: false,
+  unorderedList: false,
+  orderedList: false,
+  quote: false,
+  hasLink: false
+})
 
 const isEmpty = computed(() => !richTextHasContent(props.modelValue))
 
@@ -69,6 +88,43 @@ const restoreSelection = () => {
   return true
 }
 
+const queryCommandState = (command: string) => {
+  try {
+    return document.queryCommandState(command)
+  } catch {
+    return false
+  }
+}
+
+const findParentTag = (node: Node | null, tags: string[]) => {
+  const editor = editorRef.value
+  let current = node
+
+  while (current && current !== editor) {
+    if (current instanceof HTMLElement && tags.includes(current.tagName)) {
+      return current
+    }
+    current = current.parentNode
+  }
+
+  return null
+}
+
+const refreshCommandState = () => {
+  const selection = window.getSelection()
+  const anchorNode = selection?.anchorNode ?? null
+
+  commandState.value = {
+    bold: queryCommandState("bold"),
+    italic: queryCommandState("italic"),
+    underline: queryCommandState("underline"),
+    unorderedList: queryCommandState("insertUnorderedList"),
+    orderedList: queryCommandState("insertOrderedList"),
+    quote: !!findParentTag(anchorNode, ["BLOCKQUOTE"]),
+    hasLink: !!findParentTag(anchorNode, ["A"])
+  }
+}
+
 const emitValue = () => {
   if (!editorRef.value) {
     return
@@ -77,11 +133,13 @@ const emitValue = () => {
   const html = sanitizeRichTextHtml(editorRef.value.innerHTML)
   if (richTextHasContent(html)) {
     emit("update:modelValue", html)
+    refreshCommandState()
     return
   }
 
   editorRef.value.innerHTML = ""
   emit("update:modelValue", "")
+  refreshCommandState()
 }
 
 const execute = (command: string, value?: string) => {
@@ -91,7 +149,36 @@ const execute = (command: string, value?: string) => {
   saveSelection()
 }
 
-const promptForLink = () => {
+const toggleQuote = () => {
+  restoreSelection()
+
+  if (commandState.value.quote) {
+    document.execCommand("formatBlock", false, "p")
+  } else {
+    document.execCommand("formatBlock", false, "blockquote")
+  }
+
+  emitValue()
+  saveSelection()
+}
+
+const clearFormatting = () => {
+  restoreSelection()
+  document.execCommand("removeFormat")
+  document.execCommand("unlink")
+  emitValue()
+  saveSelection()
+}
+
+const toggleLink = () => {
+  if (commandState.value.hasLink) {
+    restoreSelection()
+    document.execCommand("unlink")
+    emitValue()
+    saveSelection()
+    return
+  }
+
   const href = window.prompt("Link URL", "https://")
   if (!href) {
     return
@@ -111,12 +198,20 @@ const insertImage = async (file: File | null) => {
   try {
     const imageDataUrl = await compressImageFile(file, 1400, 0.86)
     restoreSelection()
-    document.execCommand("insertHTML", false, `<img src="${imageDataUrl}" alt="${file.name.replaceAll("\"", "&quot;")}" loading="lazy">`)
+    document.execCommand(
+      "insertHTML",
+      false,
+      `<img src="${imageDataUrl}" alt="${file.name.replaceAll("\"", "&quot;")}" loading="lazy">`
+    )
     emitValue()
     saveSelection()
   } catch {
     // Keep the editor untouched on image failures.
   }
+}
+
+const focusEditor = () => {
+  editorRef.value?.focus()
 }
 
 const handleInput = () => {
@@ -140,6 +235,7 @@ const handleSelectionChange = () => {
   }
 
   saveSelection()
+  refreshCommandState()
 }
 
 watch(() => props.modelValue, () => {
@@ -147,11 +243,15 @@ watch(() => props.modelValue, () => {
     return
   }
 
-  void nextTick(syncEditor)
+  void nextTick(() => {
+    syncEditor()
+    refreshCommandState()
+  })
 }, {immediate: true})
 
 onMounted(() => {
   syncEditor()
+  refreshCommandState()
   document.addEventListener("selectionchange", handleSelectionChange)
 })
 
@@ -161,45 +261,122 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="rich-text-editor">
-    <div class="rich-text-editor__toolbar" :aria-label="toolbarLabel">
-      <button class="rich-text-editor__button" type="button" @mousedown.prevent="handleToolbarMouseDown" @click="execute('bold')">
-        Bold
-      </button>
-      <button class="rich-text-editor__button" type="button" @mousedown.prevent="handleToolbarMouseDown" @click="execute('italic')">
-        Italic
-      </button>
-      <button class="rich-text-editor__button" type="button" @mousedown.prevent="handleToolbarMouseDown" @click="execute('underline')">
-        Underline
-      </button>
-      <button class="rich-text-editor__button" type="button" @mousedown.prevent="handleToolbarMouseDown" @click="execute('insertUnorderedList')">
-        Bullets
-      </button>
-      <button class="rich-text-editor__button" type="button" @mousedown.prevent="handleToolbarMouseDown" @click="execute('insertOrderedList')">
-        Numbered
-      </button>
-      <button class="rich-text-editor__button" type="button" @mousedown.prevent="handleToolbarMouseDown" @click="promptForLink">
-        Link
-      </button>
-      <button class="rich-text-editor__button" type="button" @mousedown.prevent="handleToolbarMouseDown" @click="imageInputRef?.click()">
-        Image
-      </button>
-    </div>
+  <div class="rich-text-editor" :class="{ 'rich-text-editor--focused': isFocused }">
+    <div class="rich-text-editor__frame">
+      <div class="rich-text-editor__toolbar" :aria-label="toolbarLabel">
+        <div class="rich-text-editor__group">
+          <button
+            class="rich-text-editor__button"
+            :class="{ 'rich-text-editor__button--active': commandState.bold }"
+            type="button"
+            title="Bold"
+            aria-label="Bold"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="execute('bold')"
+          >
+            <span class="rich-text-editor__button-glyph"><strong>B</strong></span>
+          </button>
+          <button
+            class="rich-text-editor__button"
+            :class="{ 'rich-text-editor__button--active': commandState.italic }"
+            type="button"
+            title="Italic"
+            aria-label="Italic"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="execute('italic')"
+          >
+            <span class="rich-text-editor__button-glyph rich-text-editor__button-glyph--italic">I</span>
+          </button>
+          <button
+            class="rich-text-editor__button"
+            :class="{ 'rich-text-editor__button--active': commandState.underline }"
+            type="button"
+            title="Underline"
+            aria-label="Underline"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="execute('underline')"
+          >
+            <span class="rich-text-editor__button-glyph rich-text-editor__button-glyph--underline">U</span>
+          </button>
+        </div>
 
-    <div
-      ref="editorRef"
-      class="rich-text-editor__surface"
-      :class="{ 'rich-text-editor__surface--empty': isEmpty }"
-      contenteditable="true"
-      spellcheck="true"
-      :data-placeholder="placeholder"
-      @focus="isFocused = true"
-      @blur="isFocused = false"
-      @mouseup="saveSelection"
-      @keyup="saveSelection"
-      @input="handleInput"
-      @paste="handlePaste"
-    />
+        <div class="rich-text-editor__group">
+          <button
+            class="rich-text-editor__button rich-text-editor__button--wide"
+            :class="{ 'rich-text-editor__button--active': commandState.unorderedList }"
+            type="button"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="execute('insertUnorderedList')"
+          >
+            List
+          </button>
+          <button
+            class="rich-text-editor__button rich-text-editor__button--wide"
+            :class="{ 'rich-text-editor__button--active': commandState.orderedList }"
+            type="button"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="execute('insertOrderedList')"
+          >
+            Steps
+          </button>
+          <button
+            class="rich-text-editor__button rich-text-editor__button--wide"
+            :class="{ 'rich-text-editor__button--active': commandState.quote }"
+            type="button"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="toggleQuote"
+          >
+            Quote
+          </button>
+        </div>
+
+        <div class="rich-text-editor__group rich-text-editor__group--grow">
+          <button
+            class="rich-text-editor__button rich-text-editor__button--wide"
+            :class="{ 'rich-text-editor__button--active': commandState.hasLink }"
+            type="button"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="toggleLink"
+          >
+            {{ commandState.hasLink ? "Unlink" : "Link" }}
+          </button>
+          <button
+            class="rich-text-editor__button rich-text-editor__button--wide"
+            type="button"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="imageInputRef?.click()"
+          >
+            Image
+          </button>
+          <button
+            class="rich-text-editor__button rich-text-editor__button--ghost"
+            type="button"
+            @mousedown.prevent="handleToolbarMouseDown"
+            @click="clearFormatting"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="rich-text-editor__canvas" @click="focusEditor">
+        <div
+          ref="editorRef"
+          class="rich-text-editor__surface"
+          :class="{ 'rich-text-editor__surface--empty': isEmpty }"
+          contenteditable="true"
+          spellcheck="true"
+          role="textbox"
+          :data-placeholder="placeholder"
+          @focus="isFocused = true"
+          @blur="isFocused = false; refreshCommandState()"
+          @mouseup="saveSelection"
+          @keyup="saveSelection"
+          @input="handleInput"
+          @paste="handlePaste"
+        />
+      </div>
+    </div>
 
     <input
       ref="imageInputRef"

@@ -3,6 +3,7 @@ import {computed, onBeforeUnmount, onMounted, ref} from "vue"
 import {useRoute, useRouter} from "vue-router"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 import ProfileAvatar from "../profile/ProfileAvatar.vue"
+import DashboardNews from "./DashboardNews.vue"
 
 const props = defineProps<{
   dashboard: QuestDashboard
@@ -16,6 +17,7 @@ const router = useRouter()
 const isCirclesPage = computed(() => route.path === "/circles")
 
 const toggleAccountMenu = () => {
+  props.dashboard.closeNotificationsDialog()
   accountMenuOpen.value = !accountMenuOpen.value
 }
 
@@ -30,6 +32,12 @@ const goToCircles = () => {
 
 const openNotifications = () => {
   closeAccountMenu()
+
+  if (props.dashboard.isNotificationsDialogOpen) {
+    props.dashboard.closeNotificationsDialog()
+    return
+  }
+
   props.dashboard.openNotificationsDialog()
 }
 
@@ -63,12 +71,12 @@ onBeforeUnmount(() => {
 <template>
   <header ref="topbarRef" class="dashboard-topbar">
     <div class="dashboard-topbar__primary u-row-between u-items-center u-gap-16">
-      <div class="dashboard-brand">
+      <button class="dashboard-brand dashboard-brand--link" type="button" @click="props.dashboard.clearOverviewFocus(); goToDashboardTab('overview')">
         <div class="dashboard-brand__copy">
           <div class="brand__title">SideQuest</div>
-          <small>Work with your circles</small>
+          <small>Overview</small>
         </div>
-      </div>
+      </button>
 
       <div class="dashboard-topbar__user-shell">
         <button class="dashboard-topbar__utility" type="button" aria-label="Open notifications" @click="openNotifications">
@@ -78,6 +86,12 @@ onBeforeUnmount(() => {
             {{ props.dashboard.unreadNewsCount }}
           </span>
         </button>
+
+        <Transition name="sheet-fade">
+          <div v-if="props.dashboard.isNotificationsDialogOpen" class="dashboard-notifications-popover">
+            <DashboardNews :dashboard="dashboard" />
+          </div>
+        </Transition>
 
         <button
           class="dashboard-topbar__user"

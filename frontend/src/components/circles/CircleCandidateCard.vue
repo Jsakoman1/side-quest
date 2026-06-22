@@ -10,6 +10,7 @@ defineProps<{
 }>()
 
 defineEmits<{
+  openProfile: [id: number]
   invite: [id: number]
   block: [id: number]
   unblock: [id: number]
@@ -17,15 +18,15 @@ defineEmits<{
 </script>
 
 <template>
-  <article class="profile-open-quest">
+  <article class="profile-open-quest circles-person-card">
     <div class="profile-open-quest__top">
-      <RouterLink class="profile-link" :to="`/users/${user.id}`">
+      <button class="profile-link profile-link--button" type="button" @click="$emit('openProfile', user.id)">
         <ProfileAvatar :username="user.username" :avatar-data-url="user.profileAvatarDataUrl" :size="56" />
-        <div class="stack">
+        <div class="stack circles-person-card__identity">
           <strong>{{ user.username }}</strong>
           <div class="muted">{{ user.email }}</div>
         </div>
-      </RouterLink>
+      </button>
       <span
         class="badge"
         :class="{
@@ -39,7 +40,7 @@ defineEmits<{
     </div>
 
     <ProfileBio :text="user.profileDescription" placeholder="No profile description." />
-    <div class="button-row mt-3">
+    <div class="button-row circles-person-card__actions">
       <button v-if="user.relationStatus === 'NONE'" class="button" type="button" :disabled="saving" @click="$emit('invite', user.id)">Send invite</button>
       <button v-if="user.relationStatus === 'BLOCKED' && user.blockedByCurrentUser" class="button button--secondary" type="button" :disabled="saving" @click="$emit('unblock', user.id)">Unblock</button>
       <button v-else-if="user.relationStatus === 'BLOCKED'" class="button button--secondary" type="button" disabled>Blocked by them</button>

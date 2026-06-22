@@ -61,9 +61,8 @@ const withdrawApplication = () => {
 <template>
   <UiDialog
     :open="!!application"
-    :leading="application ? `$ ${application.proposedPrice}` : ''"
     :title="application?.questTitle ?? 'Application'"
-    subtitle="Your application, your message, your next move."
+    subtitle=""
     size="lg"
     @close="props.dashboard.closeApplicationDialog()"
   >
@@ -110,9 +109,9 @@ const withdrawApplication = () => {
           </div>
           <div class="field">
             <span class="label">Posted by</span>
-            <RouterLink class="profile-link profile-link--text" :to="`/users/${quest.creatorId}`">
+            <button class="dialog-inline-link" type="button" @click="props.dashboard.openUserProfileDialog(quest.creatorId)">
               {{ quest.creatorUsername }}
-            </RouterLink>
+            </button>
           </div>
         </div>
       </section>

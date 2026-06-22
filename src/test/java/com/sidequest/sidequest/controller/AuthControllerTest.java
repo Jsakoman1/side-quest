@@ -9,17 +9,45 @@ import jakarta.validation.ValidatorFactory;
 import jakarta.validation.Valid;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.sidequest.sidequest.dto.auth.AuthResponse;
+import com.sidequest.sidequest.model.AppUser;
+import com.sidequest.sidequest.repository.AppUserRepository;
+import com.sidequest.sidequest.security.JwtService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class AuthControllerTest {
 
     private static final ValidatorFactory VALIDATOR_FACTORY = Validation.buildDefaultValidatorFactory();
     private static final Validator VALIDATOR = VALIDATOR_FACTORY.getValidator();
+
+    @Mock
+    private AppUserRepository appUserRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private JwtService jwtService;
+
+    @InjectMocks
+    private AuthController authController;
 
     @AfterAll
     static void tearDown() {
@@ -65,6 +93,26 @@ class AuthControllerTest {
 
         assertTrue(VALIDATOR.validate(registerRequest).isEmpty());
         assertTrue(VALIDATOR.validate(loginRequest).isEmpty());
+    }
+
+    @Test
+    void loginNormalizesEmailBeforeLookup() {
+        AppUser appUser = new AppUser();
+        appUser.setId(7L);
+        appUser.setEmail("user@example.com");
+        appUser.setUsername("user");
+        appUser.setPasswordHash("encoded-password");
+        appUser.setCreatedAt(Instant.parse("2026-01-01T12:00:00Z"));
+
+        when(appUserRepository.findByEmail("user@example.com")).thenReturn(Optional.of(appUser));
+        when(passwordEncoder.matches("strongPassword1", "encoded-password")).thenReturn(true);
+        when(jwtService.generateToken(appUser)).thenReturn("jwt-token");
+
+        AuthResponse response = authController.login(new LoginRequest(" User@Example.com ", "strongPassword1"));
+
+        verify(appUserRepository).findByEmail("user@example.com");
+        assertEquals("jwt-token", response.token());
+        assertEquals("user@example.com", response.email());
     }
 
     private void assertHasViolation(Set<? extends ConstraintViolation<?>> violations, String propertyPath) {

@@ -38,7 +38,8 @@ public class AuthController {
 
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest loginRequest) {
-        AppUser appUser = appUserRepository.findByEmail(loginRequest.email())
+        String email = UserInputNormalizer.normalizeEmail(loginRequest.email());
+        AppUser appUser = appUserRepository.findByEmail(email)
                 .orElseThrow(() -> ServiceErrors.unauthorized("Invalid email"));
 
         if (!passwordEncoder.matches(loginRequest.password(), appUser.getPasswordHash())) {

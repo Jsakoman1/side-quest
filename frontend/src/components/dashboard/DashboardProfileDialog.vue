@@ -14,7 +14,7 @@ defineProps<{
   <UiDialog
     :open="dashboard.isProfileEditDialogOpen"
     title="Edit profile"
-    subtitle="Update your username, avatar, and profile description."
+    subtitle="Update your public details and profile text."
     size="xl"
     @close="dashboard.closeProfileEditDialog"
   >

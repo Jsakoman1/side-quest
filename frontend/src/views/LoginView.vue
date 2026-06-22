@@ -12,8 +12,9 @@ const router = useRouter()
 const login = async () => {
   error.value = ''
   try {
+    const normalizedEmail = email.value.trim().toLowerCase()
     const response = await authApi.login({
-      email: email.value,
+      email: normalizedEmail,
       password: password.value
     })
     loginUser(response)

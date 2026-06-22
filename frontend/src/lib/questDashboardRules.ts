@@ -97,11 +97,3 @@ export const statusSurfaceClass = (status: string) => {
 
   return "status-surface status-surface--open"
 }
-
-export const isReopenedQuest = (reopenedAt: string | null | undefined, status: string) => {
-  return status === "OPEN" && !!reopenedAt
-}
-
-export const formatQuestReopenLabel = (reopenedAt: string | null | undefined, status: string) => {
-  return isReopenedQuest(reopenedAt, status) ? "Reopened" : "Open"
-}

@@ -295,6 +295,7 @@ class QuestServiceTest {
         Quest quest = new Quest();
         quest.setId(9L);
         quest.setCreator(creator);
+        quest.setAssigneeTarget(3);
 
         QuestRequestDTO requestDTO = QuestRequestDTO.builder()
                 .title("Updated title")
@@ -314,6 +315,7 @@ class QuestServiceTest {
         assertEquals("Updated title", savedQuest.getTitle());
         assertEquals("Updated description", savedQuest.getDescription());
         assertEquals(BigDecimal.valueOf(80), savedQuest.getAwardAmount());
+        assertEquals(3, savedQuest.getAssigneeTarget());
     }
 
     @Test

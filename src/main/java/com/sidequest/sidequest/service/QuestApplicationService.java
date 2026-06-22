@@ -57,6 +57,14 @@ public class QuestApplicationService {
                 .toList();
     }
 
+    public List<QuestApplicationResponseDTO> getAllApplicationsForAdmin(AppUser currentUser) {
+        validateAdmin(currentUser);
+
+        return questApplicationRepository.findAllDetailed().stream()
+                .map(questApplicationMgr::toDto)
+                .toList();
+    }
+
     @Transactional
     public QuestApplicationResponseDTO updateMyApplication(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
         QuestApplication application = requirePendingMyApplication(questId, currentUser);
@@ -212,5 +220,11 @@ public class QuestApplicationService {
 
     private boolean isAdmin(AppUser user) {
         return user != null && user.getRole() == AppUserRole.ADMIN;
+    }
+
+    private void validateAdmin(AppUser currentUser) {
+        if (!isAdmin(currentUser)) {
+            throw ServiceErrors.forbidden("Admin access is required");
+        }
     }
 }

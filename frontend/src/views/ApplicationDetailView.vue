@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch} from "vue"
 import {RouterLink, useRoute, useRouter} from "vue-router"
-import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
 import ProfileBio from "../components/profile/ProfileBio.vue"
 import {sidequestApi, type QuestApplication} from "../api/sidequestApi.ts"
 import {formatApplicationStatus, statusBadgeClass} from "../lib/questDashboardRules.ts"
 import {richTextHasContent} from "../shared/richText.ts"
+import {formatQuestTerm} from "../shared/questSchedule.ts"
 
 const route = useRoute()
 const router = useRouter()
@@ -112,10 +112,11 @@ onMounted(() => {
           {{ application.questTitle }}
         </div>
 
-        <div class="dialog-focus-card__meta">
-          <span>$ {{ application.proposedPrice }}</span>
-          <span>Quest status: {{ application.questStatus }}</span>
-        </div>
+          <div class="dialog-focus-card__meta">
+            <span>$ {{ application.proposedPrice }}</span>
+            <span>Quest status: {{ application.questStatus }}</span>
+            <span>{{ formatQuestTerm(application.questScheduledAt, application.questEndsAt, application.questTermFixed) }}</span>
+          </div>
       </div>
 
       <section class="dialog-focus-card dialog-focus-card--soft mt-4">
@@ -139,6 +140,14 @@ onMounted(() => {
           <div class="field">
             <span class="label">Status</span>
             <strong>{{ formatApplicationStatus(application.status) }}</strong>
+          </div>
+          <div class="field">
+            <span class="label">Term</span>
+            <strong>{{ formatQuestTerm(application.questScheduledAt, application.questEndsAt, application.questTermFixed) }}</strong>
+          </div>
+          <div v-if="application.questAssigneeTarget === null || application.questAssigneeTarget > 1" class="field">
+            <span class="label">Workers</span>
+            <strong>{{ application.questAssigneeTarget === null ? "Unlimited" : application.questAssigneeTarget }}</strong>
           </div>
         </div>
       </section>

@@ -1,6 +1,6 @@
 import type {QuestAudience, QuestStatus} from "../shared/sidequestDomain.ts"
 
-export type QuestSearchFilters = {
+type QuestSearchFilters = {
   q?: string
   status?: QuestStatus | null
   audience?: QuestAudience | null
@@ -31,4 +31,3 @@ export const buildQuestSearchParams = (filters: QuestSearchFilters) => {
 
   return queryParams
 }
-

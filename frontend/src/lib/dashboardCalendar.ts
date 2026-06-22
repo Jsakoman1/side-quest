@@ -1,4 +1,4 @@
-export const padTwoDigits = (value: number) => String(value).padStart(2, "0")
+const padTwoDigits = (value: number) => String(value).padStart(2, "0")
 
 export const toDateKey = (date: Date) => {
   return `${date.getFullYear()}-${padTwoDigits(date.getMonth() + 1)}-${padTwoDigits(date.getDate())}`
@@ -40,15 +40,26 @@ export const parseDateKey = (value: string | null | undefined) => {
   return date
 }
 
-export const formatTimeLabel = (value: string | null | undefined) => {
-  const date = parseDate(value)
-  if (!date) {
+export const formatTimeLabel = (startValue: string | null | undefined, endValue?: string | null | undefined) => {
+  const startDate = parseDate(startValue)
+  if (!startDate) {
     return "All day"
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
+  const startLabel = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit"
-  }).format(date)
-}
+  }).format(startDate)
 
+  const endDate = parseDate(endValue)
+  if (!endDate) {
+    return startLabel
+  }
+
+  const endLabel = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(endDate)
+
+  return `${startLabel}-${endLabel}`
+}

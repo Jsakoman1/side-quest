@@ -1,5 +1,7 @@
 import {createRouter, createWebHistory} from "vue-router";
 import AdminQuestsPage from "./pages/AdminQuestsPage.vue";
+import AdminApplicationsPage from "./pages/AdminApplicationsPage.vue";
+import AdminCirclesPage from "./pages/AdminCirclesPage.vue";
 import AdminUsersPage from "./pages/AdminUsersPage.vue";
 import CirclesView from "./views/CirclesView.vue";
 import QuestsPage from "./pages/QuestsPage.vue";
@@ -65,6 +67,16 @@ const routes = [
         meta: {requiresAuth: true, requiresAdmin: true}
     },
     {
+        path: '/admin/applications',
+        component: AdminApplicationsPage,
+        meta: {requiresAuth: true, requiresAdmin: true}
+    },
+    {
+        path: '/admin/circles',
+        component: AdminCirclesPage,
+        meta: {requiresAuth: true, requiresAdmin: true}
+    },
+    {
         path: '/app-users',
         redirect: '/admin/users'
     }
@@ -84,7 +96,7 @@ router.beforeEach((to) => {
         return '/quests';
     }
 
-    if (isAdmin() && (to.path === '/quests' || to.path.startsWith('/quests/'))) {
+    if (isAdmin() && to.path === '/quests') {
         return '/admin/quests';
     }
 

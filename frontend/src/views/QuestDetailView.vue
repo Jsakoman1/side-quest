@@ -37,6 +37,7 @@ const myApplication = computed(() => {
 })
 
 const isActionInProgress = ref(false)
+const showTermChangeDetails = ref(false)
 const actionBanner = useTimedBanner()
 const actionMessage = actionBanner.message
 const actionMessageTone = actionBanner.tone
@@ -170,7 +171,7 @@ onMounted(init)
         </div>
 
         <div class="dialog-focus-card__meta">
-          <span>{{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}</span>
+          <span>{{ formatQuestTerm(quest.scheduledAt, quest.endsAt, quest.termFixed) }}</span>
           <span>{{ quest.termFixed ? "Fixed" : "Negotiable" }}</span>
         </div>
       </div>
@@ -190,25 +191,30 @@ onMounted(init)
       <div class="dialog-focus-grid">
         <div class="field">
           <span class="label">Scheduled time</span>
-          <strong>{{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}</strong>
+          <strong>{{ formatQuestTerm(quest.scheduledAt, quest.endsAt, quest.termFixed) }}</strong>
         </div>
         <div class="field">
           <span class="label">Time type</span>
           <strong>{{ quest.termFixed ? "Fixed time" : "By agreement" }}</strong>
         </div>
+        <div v-if="quest.assigneeTarget === null || quest.assigneeTarget > 1" class="field">
+          <span class="label">Workers</span>
+          <strong>{{ quest.assigneeTarget === null ? "Unlimited" : quest.assigneeTarget }}</strong>
+        </div>
       </div>
 
-      <div v-if="quest.status === 'WAITING_CONFIRMATION'" class="alert alert--warning mt-4">
-        <div class="stack">
-          <strong>Term change waiting for confirmation</strong>
-          <div class="muted">
-            Current term: {{ formatQuestTerm(quest.scheduledAt, quest.termFixed) }}
-          </div>
-          <div class="muted">
-            Pending term: {{ formatQuestTerm(quest.pendingScheduledAt, quest.pendingTermFixed ?? quest.termFixed) }}
-          </div>
-          <div class="muted">
-            The approved applicant must confirm the new time before the quest can continue.
+      <div v-if="quest.status === 'WAITING_CONFIRMATION'" class="compact-disclosure mt-4">
+        <button class="compact-disclosure--launch" type="button" @click="showTermChangeDetails = !showTermChangeDetails">
+          Term change waiting
+        </button>
+        <div v-if="showTermChangeDetails" class="alert alert--warning mt-2">
+          <div class="stack">
+            <div class="muted">
+              Current term: {{ formatQuestTerm(quest.scheduledAt, quest.endsAt, quest.termFixed) }}
+            </div>
+            <div class="muted">
+              Pending term: {{ formatQuestTerm(quest.pendingScheduledAt, quest.pendingEndsAt, quest.pendingTermFixed ?? quest.termFixed) }}
+            </div>
           </div>
         </div>
       </div>

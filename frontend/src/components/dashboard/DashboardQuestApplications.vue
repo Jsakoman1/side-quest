@@ -20,7 +20,9 @@ defineEmits<{
 <template>
   <div v-if="approvedApplication" class="dialog-application-card dialog-application-card--selected">
     <div class="dialog-application-card__top">
-      <strong>Selected applicant</strong>
+      <button class="dialog-inline-link" type="button" @click="dashboard.openUserProfileDialog(approvedApplication.applicantId)">
+        {{ approvedApplication.applicantUsername }}
+      </button>
     </div>
     <div class="dialog-application-card__price">$ {{ approvedApplication.proposedPrice }}</div>
     <ProfileBio v-if="richTextHasContent(approvedApplication.message)" class="dialog-application-card__message" :text="approvedApplication.message" />
@@ -31,7 +33,9 @@ defineEmits<{
     <div v-if="applications.length" class="stack">
       <div v-for="application in applications" :key="application.id" class="dialog-application-card">
         <div class="dialog-application-card__top">
-          <strong>{{ application.applicantUsername }}</strong>
+          <button class="dialog-inline-link" type="button" @click="dashboard.openUserProfileDialog(application.applicantId)">
+            {{ application.applicantUsername }}
+          </button>
           <span :class="['badge', dashboard.statusBadgeClass(application.status)]">
             {{ dashboard.formatApplicationStatus(application.status) }}
           </span>

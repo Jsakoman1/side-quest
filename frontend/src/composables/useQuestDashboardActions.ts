@@ -15,7 +15,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       fetchMyApplications(),
       fetchNews(),
       fetchDashboardSummary(),
-      fetchIncomingCircleRequests(),
+      fetchCircleOverview(),
       fetchAppUsers()
     ])
   }
@@ -76,11 +76,14 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     }
   }
 
-  const fetchIncomingCircleRequests = async () => {
+  const fetchCircleOverview = async () => {
     try {
-      state.incomingCircleRequests.value = await sidequestApi.getIncomingCircleRequests()
+      const overview = await sidequestApi.getCircleOverview()
+      state.incomingCircleRequests.value = overview.incomingRequests
+      state.circles.value = overview.circles
     } catch {
       state.incomingCircleRequests.value = []
+      state.circles.value = []
     }
   }
 
@@ -129,8 +132,13 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     }
 
     const scheduledAt = state.questScheduledAt.value ? state.parseInstantFromInput(state.questScheduledAt.value) : null
+    const endsAt = state.questEndsAt.value ? state.parseInstantFromInput(state.questEndsAt.value) : null
     if (state.questTermFixed.value && !scheduledAt) {
-      state.showFeedback("A fixed term needs a date and time.", "error")
+      state.showFeedback("Choose a start time for a fixed term.", "error")
+      return
+    }
+    if (scheduledAt && endsAt && new Date(endsAt).getTime() <= new Date(scheduledAt).getTime()) {
+      state.showFeedback("End time must be after start time.", "error")
       return
     }
     if (!richTextHasContent(state.questDescription.value)) {
@@ -144,8 +152,10 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
         description: state.questDescription.value.trim(),
         awardAmount: state.questAwardAmount.value ? Number(state.questAwardAmount.value) : null,
         scheduledAt,
+        endsAt,
         termFixed: state.questTermFixed.value,
         audience: state.questAudience.value,
+        selectedCircleIds: state.questAudience.value === "CIRCLES" ? [...state.questSelectedCircleIds.value] : [],
         creatorId: isAdmin() && state.questCreatorId.value ? Number(state.questCreatorId.value) : undefined,
         images: [...state.questImages.value]
       })
@@ -154,8 +164,11 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       state.questDescription.value = ""
       state.questAwardAmount.value = ""
       state.questScheduledAt.value = ""
+      state.questEndsAt.value = ""
+      state.questTermMode.value = "flexible"
       state.questTermFixed.value = false
       state.questAudience.value = "CIRCLES"
+      state.questSelectedCircleIds.value = []
       state.questImages.value = []
       if (isAdmin() && currentUser.value) {
         state.questCreatorId.value = String(currentUser.value.id)
@@ -380,9 +393,14 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
 
     const questId = state.editingQuestId.value
     const scheduledAt = state.editQuestScheduledAt.value ? state.parseInstantFromInput(state.editQuestScheduledAt.value) : null
+    const endsAt = state.editQuestEndsAt.value ? state.parseInstantFromInput(state.editQuestEndsAt.value) : null
 
     if (state.editQuestTermFixed.value && !scheduledAt) {
-      state.showFeedback("A fixed term needs a date and time.", "error")
+      state.showFeedback("Choose a start time for a fixed term.", "error")
+      return
+    }
+    if (scheduledAt && endsAt && new Date(endsAt).getTime() <= new Date(scheduledAt).getTime()) {
+      state.showFeedback("End time must be after start time.", "error")
       return
     }
     if (!richTextHasContent(state.editQuestDescription.value)) {
@@ -396,8 +414,10 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
         description: state.editQuestDescription.value.trim(),
         awardAmount: state.editQuestAwardAmount.value ? Number(state.editQuestAwardAmount.value) : null,
         scheduledAt,
+        endsAt,
         termFixed: state.editQuestTermFixed.value,
         audience: state.editQuestAudience.value,
+        selectedCircleIds: state.editQuestAudience.value === "CIRCLES" ? [...state.editQuestSelectedCircleIds.value] : [],
         creatorId: isAdmin() && state.editQuestCreatorId.value ? Number(state.editQuestCreatorId.value) : undefined,
         status: isAdmin() ? state.editQuestStatus.value : undefined
       })
@@ -504,7 +524,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     fetchMyApplications,
     fetchNews,
     fetchDashboardSummary,
-    fetchIncomingCircleRequests,
+    fetchCircleOverview,
     markNewsAsRead,
     markNewsItemAsRead,
     fetchAppUsers,
@@ -534,5 +554,3 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     init
   }
 }
-
-export type QuestDashboardActions = ReturnType<typeof useQuestDashboardActions>

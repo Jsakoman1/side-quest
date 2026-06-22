@@ -36,6 +36,7 @@ const applications = computed(() => {
 const isEditing = ref(false)
 const isDeleting = ref(false)
 const isTermDecisioning = ref(false)
+const showTermChangeDetails = ref(false)
 const actionBanner = useDialogActionState(quest, () => {
   isEditing.value = false
   isDeleting.value = false
@@ -242,9 +243,8 @@ const rejectTermChange = () => {
 <template>
   <UiDialog
     :open="!!quest"
-    :leading="quest ? `$ ${quest.awardAmount}` : ''"
     :title="quest?.title ?? 'Quest'"
-    subtitle="Focused work view."
+    subtitle=""
     size="lg"
     @close="props.dashboard.closeQuestDialog()"
   >
@@ -255,14 +255,12 @@ const rejectTermChange = () => {
     <div v-if="quest" class="stack dialog-sheet">
       <section v-if="myApplication && !isEditing" class="dialog-focus-card dialog-focus-card--application">
         <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
-          <span :class="['badge', props.dashboard.statusBadgeClass(myApplication.status)]">
-            {{ props.dashboard.formatApplicationStatus(myApplication.status) }}
-          </span>
-          <span class="dialog-focus-card__kicker">Your application</span>
-        </div>
-
-        <div class="dialog-focus-card__title">
-          $ {{ myApplication.proposedPrice }}
+          <div class="dialog-focus-card__meta">
+            <span :class="['badge', props.dashboard.statusBadgeClass(myApplication.status)]">
+              {{ props.dashboard.formatApplicationStatus(myApplication.status) }}
+            </span>
+            <span>$ {{ myApplication.proposedPrice }}</span>
+          </div>
         </div>
 
         <ProfileBio
@@ -288,19 +286,15 @@ const rejectTermChange = () => {
 
       <section class="dialog-focus-card dialog-focus-card--primary">
         <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
-          <span :class="['badge', props.dashboard.statusBadgeClass(quest.status)]">
-            {{ props.dashboard.formatStatus(quest.status) }}
-          </span>
-          <span class="dialog-focus-card__kicker">Quest summary</span>
-        </div>
-
-        <div class="dialog-focus-card__title">
-          $ {{ quest.awardAmount }}
-        </div>
-
-        <div class="dialog-focus-card__meta">
-          <span>{{ props.dashboard.formatQuestTermLabel(quest) }}</span>
-          <span>Posted by {{ quest.creatorUsername }}</span>
+          <div class="dialog-focus-card__meta">
+            <span :class="['badge', props.dashboard.statusBadgeClass(quest.status)]">
+              {{ props.dashboard.formatStatus(quest.status) }}
+            </span>
+            <span class="badge badge--accent">$ {{ quest.awardAmount }}</span>
+          </div>
+          <button class="dialog-inline-link" type="button" @click="props.dashboard.openUserProfileDialog(quest.creatorId)">
+            {{ quest.creatorUsername }}
+          </button>
         </div>
       </section>
 
@@ -313,25 +307,32 @@ const rejectTermChange = () => {
       </div>
 
       <section v-if="richTextHasContent(quest.description)" class="dialog-focus-card dialog-focus-card--soft">
-        <div class="dialog-focus-card__section-title">Quest details</div>
         <ProfileBio class="dialog-sheet__description dialog-sheet__description--flat" :text="quest.description" />
       </section>
 
       <div class="dialog-focus-grid">
         <div class="field">
-          <span class="label">Scheduled time</span>
+          <span class="label">When</span>
           <strong>{{ props.dashboard.formatQuestTermLabel(quest) }}</strong>
         </div>
         <div class="field">
-          <span class="label">Time type</span>
+          <span class="label">Type</span>
           <strong>{{ quest.termFixed ? "Fixed" : "Negotiable" }}</strong>
+        </div>
+        <div v-if="quest.assigneeTarget === null || quest.assigneeTarget > 1" class="field">
+          <span class="label">Workers</span>
+          <strong>{{ quest.assigneeTarget === null ? "Unlimited" : quest.assigneeTarget }}</strong>
         </div>
       </div>
 
-      <div v-if="quest.status === 'WAITING_CONFIRMATION'" class="alert alert--warning">
-        <strong>Term change waiting for confirmation</strong>
-        <div class="muted mt-2">Current: {{ props.dashboard.formatQuestTermLabel(quest) }}</div>
-        <div class="muted">Pending: {{ props.dashboard.formatQuestTermFromParts(quest.pendingScheduledAt, quest.pendingTermFixed ?? quest.termFixed) }}</div>
+      <div v-if="quest.status === 'WAITING_CONFIRMATION'" class="compact-disclosure">
+        <button class="compact-disclosure--launch" type="button" @click="showTermChangeDetails = !showTermChangeDetails">
+          Term change waiting
+        </button>
+        <div v-if="showTermChangeDetails" class="alert alert--warning">
+          <div class="muted">Current: {{ props.dashboard.formatQuestTermLabel(quest) }}</div>
+          <div class="muted">Pending: {{ props.dashboard.formatQuestTermFromParts(quest.pendingScheduledAt, quest.pendingEndsAt, quest.pendingTermFixed ?? quest.termFixed) }}</div>
+        </div>
       </div>
 
       <DashboardQuestEditForm

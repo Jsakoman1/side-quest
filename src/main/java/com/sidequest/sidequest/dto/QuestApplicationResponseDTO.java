@@ -20,6 +20,10 @@ public class QuestApplicationResponseDTO {
     private String questTitle;
     private String questDescription;
     private QuestStatus questStatus;
+    private Integer questAssigneeTarget;
+    private Instant questScheduledAt;
+    private Instant questEndsAt;
+    private boolean questTermFixed;
 
     private Long applicantId;
     private String applicantUsername;

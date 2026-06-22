@@ -2,7 +2,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue"
 import {useRoute, useRouter} from "vue-router"
 import {currentUser, isAdmin} from "../auth.ts"
 import {formatDebugInfo} from "../httpDebug.ts"
-import {type AppUser, type CircleRequest, type DashboardSummary, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
+import {type AppUser, type CircleRequest, type CircleGroup, type DashboardSummary, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
 import {
   formatApplicationStatus,
   formatQuestStatus,
@@ -40,6 +40,7 @@ export const useQuestDashboardState = () => {
   const unreadNewsCount = ref(0)
   const dashboardSummary = ref<DashboardSummary | null>(null)
   const incomingCircleRequests = ref<CircleRequest[]>([])
+  const circles = ref<CircleGroup[]>([])
   const appUsers = ref<AppUser[]>([])
 
   const isLoadingQuests = ref(false)
@@ -70,8 +71,11 @@ export const useQuestDashboardState = () => {
   const questDescription = ref("")
   const questAwardAmount = ref("")
   const questScheduledAt = ref("")
+  const questEndsAt = ref("")
+  const questTermMode = ref<"flexible" | "start-only" | "start-end">("flexible")
   const questTermFixed = ref(false)
   const questAudience = ref<QuestAudience>("CIRCLES")
+  const questSelectedCircleIds = ref<number[]>([])
   const questCreatorId = ref("")
   const questImages = ref<string[]>([])
 
@@ -95,8 +99,11 @@ export const useQuestDashboardState = () => {
   const editQuestDescription = ref("")
   const editQuestAwardAmount = ref("")
   const editQuestScheduledAt = ref("")
+  const editQuestEndsAt = ref("")
+  const editQuestTermMode = ref<"flexible" | "start-only" | "start-end">("flexible")
   const editQuestTermFixed = ref(false)
   const editQuestAudience = ref<QuestAudience>("CIRCLES")
+  const editQuestSelectedCircleIds = ref<number[]>([])
   const editQuestCreatorId = ref("")
   const editQuestStatus = ref<QuestStatus>("OPEN")
   const editingApplicationId = ref<number | null>(null)
@@ -105,6 +112,7 @@ export const useQuestDashboardState = () => {
   const overviewFocus = ref<OverviewFocus | null>(null)
   const questDialogId = ref<number | null>(null)
   const applicationDialogId = ref<number | null>(null)
+  const userProfileDialogId = ref<number | null>(null)
   const isCreateJobDialogOpen = ref(false)
   const isFindWorkDialogOpen = ref(false)
   const isOpenWorkDialogOpen = ref(false)
@@ -281,8 +289,32 @@ export const useQuestDashboardState = () => {
   const hasAppliedToQuest = (questId: number) => appliedQuestIds.value.has(questId)
 
   const formatDateTime = (value: string) => formatInstantForDisplay(value)
-  const formatQuestTermLabel = (quest: Quest) => formatQuestTerm(quest.scheduledAt, quest.termFixed)
-  const formatQuestTermFromParts = (scheduledAt: string | null | undefined, termFixed: boolean) => formatQuestTerm(scheduledAt, termFixed)
+  const formatQuestTermLabel = (quest: Quest) => formatQuestTerm(quest.scheduledAt, quest.endsAt, quest.termFixed)
+  const formatQuestTermFromParts = (scheduledAt: string | null | undefined, endsAt: string | null | undefined, termFixed: boolean) => formatQuestTerm(scheduledAt, endsAt, termFixed)
+
+  const setQuestTermMode = (mode: "flexible" | "start-only" | "start-end") => {
+    questTermMode.value = mode
+    questTermFixed.value = mode !== "flexible"
+    if (mode === "flexible") {
+      questScheduledAt.value = ""
+      questEndsAt.value = ""
+    }
+    if (mode === "start-only") {
+      questEndsAt.value = ""
+    }
+  }
+
+  const setEditQuestTermMode = (mode: "flexible" | "start-only" | "start-end") => {
+    editQuestTermMode.value = mode
+    editQuestTermFixed.value = mode !== "flexible"
+    if (mode === "flexible") {
+      editQuestScheduledAt.value = ""
+      editQuestEndsAt.value = ""
+    }
+    if (mode === "start-only") {
+      editQuestEndsAt.value = ""
+    }
+  }
 
   const showFeedback = (message: string, type: "error" | "success") => {
     if (feedbackTimeout.value !== null) {
@@ -366,6 +398,18 @@ export const useQuestDashboardState = () => {
   const closeApplicationDialog = () => {
     applicationDialogId.value = null
     cancelEditingApplication()
+  }
+
+  const openUserProfileDialog = (userId: number) => {
+    if (!Number.isFinite(userId)) {
+      return
+    }
+
+    userProfileDialogId.value = userId
+  }
+
+  const closeUserProfileDialog = () => {
+    userProfileDialogId.value = null
   }
 
   const openCreateJobDialog = () => {
@@ -554,8 +598,11 @@ export const useQuestDashboardState = () => {
     editQuestDescription.value = quest.description
     editQuestAwardAmount.value = String(quest.awardAmount ?? "")
     editQuestScheduledAt.value = formatInstantForInput(quest.scheduledAt)
+    editQuestEndsAt.value = formatInstantForInput(quest.endsAt)
+    editQuestTermMode.value = quest.termFixed ? (quest.endsAt ? "start-end" : "start-only") : "flexible"
     editQuestTermFixed.value = quest.termFixed
     editQuestAudience.value = quest.audience
+    editQuestSelectedCircleIds.value = quest.visibleToCircles.map((circle) => circle.id)
     editQuestCreatorId.value = String(quest.creatorId)
     editQuestStatus.value = quest.status
     openApplicationsQuestIds.value[quest.id] = false
@@ -568,8 +615,11 @@ export const useQuestDashboardState = () => {
     questDescription.value = quest.description
     questAwardAmount.value = String(quest.awardAmount ?? "")
     questScheduledAt.value = formatInstantForInput(quest.scheduledAt)
+    questEndsAt.value = formatInstantForInput(quest.endsAt)
+    questTermMode.value = quest.termFixed ? (quest.endsAt ? "start-end" : "start-only") : "flexible"
     questTermFixed.value = quest.termFixed
     questAudience.value = quest.audience
+    questSelectedCircleIds.value = quest.visibleToCircles.map((circle) => circle.id)
     questCreatorId.value = isAdmin() ? String(quest.creatorId) : ""
     editingQuestId.value = null
     closeQuestDisclosure(quest.id)
@@ -616,6 +666,7 @@ export const useQuestDashboardState = () => {
     unreadNewsCount,
     dashboardSummary,
     incomingCircleRequests,
+    circles,
     appUsers,
     isLoadingQuests,
     isLoadingApplications,
@@ -641,8 +692,11 @@ export const useQuestDashboardState = () => {
     questDescription,
     questAwardAmount,
     questScheduledAt,
+    questEndsAt,
     questTermFixed,
+    questTermMode,
     questAudience,
+    questSelectedCircleIds,
     questCreatorId,
     questImages,
     profileUsername,
@@ -662,8 +716,11 @@ export const useQuestDashboardState = () => {
     editQuestDescription,
     editQuestAwardAmount,
     editQuestScheduledAt,
+    editQuestEndsAt,
     editQuestTermFixed,
+    editQuestTermMode,
     editQuestAudience,
+    editQuestSelectedCircleIds,
     editQuestCreatorId,
     editQuestStatus,
     editingApplicationId,
@@ -672,6 +729,7 @@ export const useQuestDashboardState = () => {
     overviewFocus,
     questDialogId,
     applicationDialogId,
+    userProfileDialogId,
     isCreateJobDialogOpen,
     isFindWorkDialogOpen,
     isOpenWorkDialogOpen,
@@ -728,6 +786,8 @@ export const useQuestDashboardState = () => {
     formatQuestTermLabel,
     formatQuestTermFromParts,
     parseInstantFromInput,
+    setQuestTermMode,
+    setEditQuestTermMode,
     showFeedback,
     triggerSuccessPulse,
     setActiveTab,
@@ -740,6 +800,8 @@ export const useQuestDashboardState = () => {
     closeNotificationsDialog,
     closeQuestDialog,
     closeApplicationDialog,
+    openUserProfileDialog,
+    closeUserProfileDialog,
     openCreateJobDialog,
     closeCreateJobDialog,
     openFindWorkDialog,

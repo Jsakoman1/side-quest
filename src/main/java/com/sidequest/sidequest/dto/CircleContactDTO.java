@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Getter
 @Builder
 @NoArgsConstructor
@@ -15,4 +17,6 @@ public class CircleContactDTO {
     private String username;
     private String profileDescription;
     private String profileAvatarDataUrl;
+    private List<Long> circleIds;
+    private List<String> circleNames;
 }
