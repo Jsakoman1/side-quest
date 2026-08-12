@@ -12,9 +12,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CircleOverviewDTO {
-    private List<CircleGroupResponseDTO> circles;
-    private List<CircleContactDTO> connections;
-    private List<CircleRequestResponseDTO> incomingRequests;
-    private List<CircleRequestResponseDTO> outgoingRequests;
-    private List<CircleSearchResultDTO> inviteCandidates;
+    private long connectionCount;
+    private long unassignedConnectionCount;
+    private long incomingRequestCount;
+    private long outgoingRequestCount;
 }

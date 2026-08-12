@@ -1,7 +1,9 @@
 package com.sidequest.sidequest.service;
 
 import com.sidequest.sidequest.dto.QuestApplicationRequestDTO;
+import com.sidequest.sidequest.dto.QuestApplicationListResponseDTO;
 import com.sidequest.sidequest.dto.QuestApplicationResponseDTO;
+import com.sidequest.sidequest.dto.QuestApplicationsViewDTO;
 import com.sidequest.sidequest.mapper.QuestApplicationMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
@@ -17,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Comparator;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +37,7 @@ public class QuestApplicationService {
         Quest quest = requireVisibleOpenQuest(questId, currentUser);
         validateNotQuestCreator(quest, currentUser);
         validateNoDuplicateApplication(questId, currentUser.getId());
-        validateMessage(dto);
+        validateApplicationInput(dto);
 
         QuestApplication application = questApplicationMgr.toEntity(dto, quest, currentUser);
         QuestApplicationResponseDTO response = saveAndMapApplication(application);
@@ -48,6 +52,35 @@ public class QuestApplicationService {
                 .stream()
                 .map(questApplicationMgr::toDto)
                 .toList();
+    }
+
+    public QuestApplicationsViewDTO getApplicationsViewForQuest(Long questId, AppUser currentUser, boolean showAll) {
+        Quest quest = requireQuest(questId);
+        validateQuestOwnerOrAdmin(quest, currentUser);
+
+        List<QuestApplicationResponseDTO> sortedApplications = questApplicationRepository.findByQuestId(questId).stream()
+                .sorted(Comparator.comparing(QuestApplication::getId).reversed())
+                .map(questApplicationMgr::toDto)
+                .toList();
+
+        QuestApplicationResponseDTO featuredApplication = sortedApplications.stream()
+                .filter(application -> application.getStatus() == QuestApplicationStatus.APPROVED)
+                .findFirst()
+                .orElse(null);
+
+        List<QuestApplicationResponseDTO> visibleApplications = resolveVisibleApplications(quest, sortedApplications, featuredApplication, showAll);
+        int hiddenApplicationsCount = Math.max(0, sortedApplications.size() - visibleApplications.size() - (featuredApplication == null ? 0 : 1));
+        boolean canRevealHiddenApplications = sortedApplications.size() > visibleApplications.size() + (featuredApplication == null ? 0 : 1);
+
+        return QuestApplicationsViewDTO.builder()
+                .featuredApplication(featuredApplication)
+                .visibleApplications(visibleApplications)
+                .hiddenApplicationsCount(hiddenApplicationsCount)
+                .selectedApplicationId(resolveSelectedApplicationId(featuredApplication, visibleApplications))
+                .canRevealHiddenApplications(canRevealHiddenApplications)
+                .showingAllApplications(showAll)
+                .revealLabel(resolveRevealLabel(quest, featuredApplication, showAll))
+                .build();
     }
 
     public List<QuestApplicationResponseDTO> getApplicationsForApplicant(AppUser currentUser) {
@@ -65,10 +98,44 @@ public class QuestApplicationService {
                 .toList();
     }
 
+    public QuestApplicationListResponseDTO searchApplicationsForAdmin(
+            AppUser currentUser,
+            String query,
+            QuestApplicationStatus status,
+            Integer page,
+            Integer size
+    ) {
+        validateAdmin(currentUser);
+
+        String normalizedQuery = SearchQueryNormalizer.normalize(query).toLowerCase(Locale.ROOT);
+        int safeSize = size == null || size < 1 ? 20 : size;
+        int safePage = page == null || page < 0 ? 0 : page;
+
+        List<QuestApplicationResponseDTO> filtered = questApplicationRepository.findAllDetailed().stream()
+                .map(questApplicationMgr::toDto)
+                .filter(application -> status == null || application.getStatus() == status)
+                .filter(application -> matchesAdminQuery(application, normalizedQuery))
+                .sorted(Comparator.comparing(QuestApplicationResponseDTO::getCreatedAt).reversed())
+                .toList();
+
+        int totalItems = filtered.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / safeSize));
+        int start = Math.min(safePage * safeSize, totalItems);
+        int end = Math.min(start + safeSize, totalItems);
+
+        return QuestApplicationListResponseDTO.builder()
+                .items(filtered.subList(start, end))
+                .page(safePage)
+                .size(safeSize)
+                .totalItems(totalItems)
+                .totalPages(totalPages)
+                .build();
+    }
+
     @Transactional
     public QuestApplicationResponseDTO updateMyApplication(Long questId, QuestApplicationRequestDTO dto, AppUser currentUser) {
         QuestApplication application = requirePendingMyApplication(questId, currentUser);
-        validateMessage(dto);
+        validateApplicationInput(dto);
         application.setMessage(dto.getMessage() == null ? null : dto.getMessage().trim());
         application.setProposedPrice(dto.getProposedPrice());
         QuestApplicationResponseDTO response = saveAndMapApplication(application);
@@ -163,6 +230,72 @@ public class QuestApplicationService {
         return questApplicationMgr.toDto(questApplicationRepository.save(application));
     }
 
+    private List<QuestApplicationResponseDTO> resolveVisibleApplications(
+            Quest quest,
+            List<QuestApplicationResponseDTO> applications,
+            QuestApplicationResponseDTO featuredApplication,
+            boolean showAll
+    ) {
+        if (quest.getStatus() == QuestStatus.CANCELLED) {
+            return showAll ? applications : List.of();
+        }
+
+        if (featuredApplication != null) {
+            if (!showAll) {
+                return List.of();
+            }
+
+            return applications.stream()
+                    .filter(application -> !Objects.equals(application.getId(), featuredApplication.getId()))
+                    .toList();
+        }
+
+        return applications;
+    }
+
+    private String resolveRevealLabel(Quest quest, QuestApplicationResponseDTO featuredApplication, boolean showAll) {
+        if (quest.getStatus() == QuestStatus.CANCELLED) {
+            return showAll ? "Hide all applications" : "Show all applications";
+        }
+
+        if (featuredApplication != null) {
+            return showAll ? "Hide declined" : "Show declined";
+        }
+
+        return "Show applications";
+    }
+
+    private Long resolveSelectedApplicationId(
+            QuestApplicationResponseDTO featuredApplication,
+            List<QuestApplicationResponseDTO> visibleApplications
+    ) {
+        if (featuredApplication != null) {
+            return featuredApplication.getId();
+        }
+
+        if (visibleApplications.isEmpty()) {
+            return null;
+        }
+
+        return visibleApplications.getFirst().getId();
+    }
+
+    private boolean matchesAdminQuery(QuestApplicationResponseDTO application, String normalizedQuery) {
+        if (normalizedQuery.isBlank()) {
+            return true;
+        }
+
+        return containsNormalized(application.getQuestTitle(), normalizedQuery)
+                || containsNormalized(application.getApplicantUsername(), normalizedQuery)
+                || containsNormalized(application.getQuestStatus().name(), normalizedQuery)
+                || containsNormalized(application.getStatus().name(), normalizedQuery)
+                || containsNormalized(application.getMessage(), normalizedQuery);
+    }
+
+    private boolean containsNormalized(String value, String normalizedQuery) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(normalizedQuery);
+    }
+
     private List<QuestApplication> declineOtherPendingApplications(Long questId, Long approvedApplicationId) {
         List<QuestApplication> pendingApplications = questApplicationRepository.findByQuestIdAndStatus(questId, QuestApplicationStatus.PENDING);
         if (pendingApplications.isEmpty()) {
@@ -202,9 +335,21 @@ public class QuestApplicationService {
         }
     }
 
-    private void validateMessage(QuestApplicationRequestDTO dto) {
-        if (dto == null || dto.getMessage() == null || dto.getMessage().trim().isEmpty()) {
+    private void validateApplicationInput(QuestApplicationRequestDTO dto) {
+        if (dto == null) {
+            throw ServiceErrors.badRequest("Quest application request is required");
+        }
+
+        if (!RichTextInputValidator.hasContent(dto.getMessage())) {
             throw ServiceErrors.badRequest("Application message is required");
+        }
+
+        if (dto.getProposedPrice() == null) {
+            throw ServiceErrors.badRequest("Proposed price is required");
+        }
+
+        if (dto.getProposedPrice().compareTo(java.math.BigDecimal.valueOf(0.01)) < 0) {
+            throw ServiceErrors.badRequest("Proposed price must be at least 0.01");
         }
     }
 

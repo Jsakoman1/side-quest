@@ -2,9 +2,9 @@
 import {computed, ref} from "vue"
 import DashboardSectionHeader from "./DashboardSectionHeader.vue"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
+import {sidequestApi} from "../../api/sidequestApi.ts"
 import type {QuestAudience} from "../../shared/sidequestDomain.ts"
 import {normalizeSearchQuery} from "../../lib/searchQuery.ts"
-import {buildQuestSearchParams} from "../../lib/questSearch.ts"
 import {useQuestSearchResults} from "../../composables/useQuestSearchResults.ts"
 import UiPagination from "../ui/UiPagination.vue"
 
@@ -17,7 +17,7 @@ const audienceFilter = ref<QuestAudience | "ALL">("ALL")
 const dateFrom = ref("")
 const dateTo = ref("")
 const itemsPerPage = 8
-const {results: questResults, loadQuests, watchAndReload} = useQuestSearchResults(itemsPerPage, (page) => buildQuestSearchParams({
+const {results: questResults, loadQuests, watchAndReload} = useQuestSearchResults(itemsPerPage, (page) => sidequestApi.searchQuests({
   q: normalizeSearchQuery(questSearch.value),
   status: props.dashboard.adminQuestStatusFilter === "ALL" ? null : props.dashboard.adminQuestStatusFilter,
   audience: audienceFilter.value === "ALL" ? null : audienceFilter.value,

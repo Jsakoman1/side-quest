@@ -56,12 +56,43 @@ a new Flyway migration instead of editing an existing versioned script.
 for extra work. The platform is used for posting and browsing quests. It does not handle payments, billing, invoicing,
 or accounting. Keep this boundary clear in backend logic, API design, and UI text.
 
+`SideQuest` is not the final standalone product. It is planned as one module inside a larger application called
+`TheMuffinMan`.
+
+`TheMuffinMan` is planned to include at least these modules:
+
+1. work marketplace
+2. custom mini websites for user-owned businesses, including appointment booking
+3. thing sharing / lending
+4. car sharing based on voluntary route matches between selected circles
+
+When making architectural decisions, prefer backend models and APIs that can evolve toward this broader multi-module
+product without forcing a rewrite of core concepts such as users, circles, scheduling, bookings, visibility, and
+messaging.
+
+Additional planned product context:
+
+- A user may own multiple businesses.
+- Each business may need its own scheduling configuration, calendar, and booking slots.
+- Some booking slots are single-capacity, for example hairdresser or nails.
+- Some booking slots are multi-capacity, for example doggy daycare.
+- Thing sharing should support free lending and paid lending.
+- Car sharing suggestions must be voluntary, privacy-aware, and GDPR-conscious for both sides.
+- A shared chat model is expected across all modules and should be considered a cross-cutting concern.
+
 ## Working Preferences
 
 Treat the user as a junior developer and keep implementations simple, readable, and incremental. Prefer step-by-step
 changes over large all-at-once implementations. Follow modern `Java 21+` conventions while keeping the code approachable
 for a junior-level codebase. Focus primarily on the backend. The frontend should stay minimal and functional unless the
 user explicitly asks for more polish.
+
+Prefer putting business logic, permissions, workflow rules, validations, and state transitions in the backend.
+Keep the frontend as thin and clean as reasonably possible so that the same product logic can later be reused more
+easily for native iPhone and Android applications.
+
+Avoid pushing important domain rules into frontend-only code. Frontend code should mainly orchestrate API calls, render
+state, and handle UI-specific concerns.
 
 ## Collaboration Rules
 

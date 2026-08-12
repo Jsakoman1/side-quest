@@ -42,10 +42,8 @@ onMounted(dashboard.init)
         <UiRequestError :message="dashboard.usersError" :details="dashboard.usersErrorDetails" summary="User request debug details" :copied="dashboard.copiedDebug" @copy="dashboard.copyDebugInfo(dashboard.usersErrorDetails)" />
 
         <div v-if="dashboard.isLoadingQuests || dashboard.isLoadingApplications || dashboard.isLoadingUsers" class="empty-state">
-          <div v-if="dashboard.isLoadingQuests">Loading quests...</div>
-          <div v-if="dashboard.isLoadingApplications">Loading applications...</div>
-          <div v-if="dashboard.isLoadingUsers">Loading users...</div>
-          <div class="debug-inline mt-2">GET /quests | GET /quests/applications/me | GET /app_users</div>
+          <div>Loading dashboard...</div>
+          <div class="debug-inline mt-2">GET /dashboard/me</div>
         </div>
 
         <DashboardOverview v-if="dashboard.activeTab === 'overview'" :dashboard="dashboard" />

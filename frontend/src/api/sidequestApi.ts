@@ -1,11 +1,14 @@
 import {api, withAuth} from "./httpClient.ts"
 import type {
   AppUserRole,
+  QuestAllowedAction,
   CircleRelationStatus,
   QuestAudience,
   QuestApplicationStatus,
+  ReviewRole,
   QuestStatus,
-  QuestSortMode
+  QuestSortMode,
+  QuestViewerRelation
 } from "../shared/sidequestDomain.ts"
 import type {QuestNewsType} from "../shared/questNews.ts"
 
@@ -30,10 +33,23 @@ export interface Quest {
   audience: QuestAudience
   visibleToCircles: CircleSummary[]
   status: QuestStatus
+  viewerRelation: QuestViewerRelation
+  allowedActions: QuestAllowedAction[]
+  hasApplied: boolean
+  myApplicationId: number | null
+  canViewApplications: boolean
 }
 
-interface QuestListResponse {
+export interface QuestListResponse {
   items: Quest[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+
+export interface QuestApplicationListResponse {
+  items: QuestApplication[]
   page: number
   size: number
   totalItems: number
@@ -102,6 +118,43 @@ export interface CircleRelation {
   blockedByCurrentUser: boolean
 }
 
+export interface ProfilePrimaryAction {
+  type: "EDIT_PROFILE" | "UNBLOCK" | "OPEN_CIRCLES" | "SEND_INVITE" | "NONE"
+  label: string
+  enabled: boolean
+}
+
+export interface UserProfileView {
+  profile: AppUser
+  ownProfile: boolean
+  relation: CircleRelation
+  primaryAction: ProfilePrimaryAction
+  showBlockAction: boolean
+  blockActionEnabled: boolean
+  employerRating: UserRatingSummary
+  workerRating: UserRatingSummary
+  recentReviews: UserReview[]
+}
+
+export interface UserRatingSummary {
+  averageStars: number
+  reviewCount: number
+}
+
+export interface UserReview {
+  id: number
+  questId: number
+  questTitle: string
+  reviewerUserId: number
+  reviewerUsername: string
+  reviewedUserId: number
+  reviewedRole: ReviewRole
+  stars: number
+  comment: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CircleContact {
   relationId: number
   userId: number
@@ -110,6 +163,14 @@ export interface CircleContact {
   profileAvatarDataUrl: string | null
   circleIds: number[]
   circleNames: string[]
+}
+
+export interface CircleContactListResponse {
+  items: CircleContact[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
 }
 
 export interface CircleSummary {
@@ -131,6 +192,22 @@ export interface CircleGroup {
   members: CircleMembership[]
 }
 
+export interface CircleRequestListResponse {
+  items: CircleRequest[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+
+export interface CircleCandidateListResponse {
+  items: CircleCandidate[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+
 export interface AdminCircleGroup {
   id: number
   name: string
@@ -141,11 +218,10 @@ export interface AdminCircleGroup {
 }
 
 interface CircleOverview {
-  circles: CircleGroup[]
-  connections: CircleContact[]
-  incomingRequests: CircleRequest[]
-  outgoingRequests: CircleRequest[]
-  inviteCandidates: CircleCandidate[]
+  connectionCount: number
+  unassignedConnectionCount: number
+  incomingRequestCount: number
+  outgoingRequestCount: number
 }
 
 export interface AdminCircleOverview {
@@ -184,6 +260,54 @@ export interface DashboardSummary {
   totalUserCount: number
   adminUserCount: number
 }
+
+export interface DashboardResponse {
+  summary: DashboardSummary
+  quests: Quest[]
+  myQuests: Quest[]
+  availableQuests: Quest[]
+  myApplications: QuestApplication[]
+  recentNews: QuestNewsItem[]
+  incomingCircleRequests: CircleRequest[]
+  circles: CircleGroup[]
+  appUsers: AppUser[]
+}
+
+export interface QuestDetail {
+  summary: Quest
+  sections: QuestDetailSections
+  quest: Quest
+  myApplication: QuestApplication | null
+  applicationsView: QuestApplicationsView | null
+}
+
+export interface QuestDetailSections {
+  myApplication: QuestApplication | null
+  applicationsView: QuestApplicationsView | null
+}
+
+export interface QuestApplicationDetail {
+  summary: QuestApplication
+  sections: QuestApplicationDetailSections
+  application: QuestApplication
+  quest: Quest
+}
+
+export interface QuestApplicationDetailSections {
+  quest: Quest
+}
+
+export interface QuestApplicationsView {
+  featuredApplication: QuestApplication | null
+  visibleApplications: QuestApplication[]
+  hiddenApplicationsCount: number
+  selectedApplicationId: number | null
+  canRevealHiddenApplications: boolean
+  showingAllApplications: boolean
+  revealLabel: string
+}
+
+export type QuestListPreset = "AVAILABLE" | "MY_VISIBLE" | "MY_ACTIVE"
 
 interface QuestRequest {
   title: string
@@ -244,6 +368,12 @@ interface ConnectionCircleUpdateRequest {
   circleIds: number[]
 }
 
+interface UserReviewRequest {
+  reviewedUserId: number
+  stars: number
+  comment?: string | null
+}
+
 export const sidequestApi = {
   async getQuests(): Promise<Quest[]> {
     return (await api.get<Quest[]>("/quests", withAuth())).data
@@ -270,8 +400,31 @@ export const sidequestApi = {
     })).data
   },
 
+  async getQuestPreset(preset: QuestListPreset, params: Omit<QuestSearchRequest, "status" | "excludeMine">): Promise<QuestListResponse> {
+    const queryParams: Record<string, string | number | boolean> = {}
+
+    if (params.q) queryParams.q = params.q
+    if (params.audience) queryParams.audience = params.audience
+    if (params.dateFrom) queryParams.dateFrom = params.dateFrom
+    if (params.dateTo) queryParams.dateTo = params.dateTo
+    if (params.withImages !== undefined) queryParams.withImages = params.withImages
+    if (params.scheduledOnly !== undefined) queryParams.scheduledOnly = params.scheduledOnly
+    if (params.sort) queryParams.sort = params.sort
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<QuestListResponse>(`/quests/presets/${preset}`, {
+      ...withAuth(),
+      params: queryParams
+    })).data
+  },
+
   async getQuest(id: number): Promise<Quest> {
     return (await api.get<Quest>(`/quests/${id}`, withAuth())).data
+  },
+
+  async getQuestDetail(id: number): Promise<QuestDetail> {
+    return (await api.get<QuestDetail>(`/quests/${id}/detail`, withAuth())).data
   },
 
   async createQuest(dto: QuestRequest): Promise<Quest> {
@@ -306,8 +459,19 @@ export const sidequestApi = {
     return (await api.get<QuestApplication[]>(`/quests/${questId}/applications`, withAuth())).data
   },
 
+  async getQuestApplicationsView(questId: number, showAll = false): Promise<QuestApplicationsView> {
+    return (await api.get<QuestApplicationsView>(`/quests/${questId}/applications/view`, {
+      ...withAuth(),
+      params: {showAll}
+    })).data
+  },
+
   async getMyApplications(): Promise<QuestApplication[]> {
     return (await api.get<QuestApplication[]>("/quests/applications/me", withAuth())).data
+  },
+
+  async getApplicationDetail(applicationId: number): Promise<QuestApplicationDetail> {
+    return (await api.get<QuestApplicationDetail>(`/applications/${applicationId}/detail`, withAuth())).data
   },
 
   async getMyNews(): Promise<QuestNewsItem[]> {
@@ -320,6 +484,10 @@ export const sidequestApi = {
 
   async getDashboardSummary(): Promise<DashboardSummary> {
     return (await api.get<DashboardSummary>("/dashboard/me/summary", withAuth())).data
+  },
+
+  async getDashboard(): Promise<DashboardResponse> {
+    return (await api.get<DashboardResponse>("/dashboard/me", withAuth())).data
   },
 
   async markMyNewsAsRead(): Promise<void> {
@@ -358,6 +526,14 @@ export const sidequestApi = {
     return (await api.get<AppUser>(`/app_users/${id}`, withAuth())).data
   },
 
+  async getUserProfileView(id: number): Promise<UserProfileView> {
+    return (await api.get<UserProfileView>(`/app_users/${id}/profile-view`, withAuth())).data
+  },
+
+  async createQuestReview(questId: number, dto: UserReviewRequest): Promise<UserReview> {
+    return (await api.post<UserReview>(`/quests/${questId}/reviews`, dto, withAuth())).data
+  },
+
   async createAppUser(dto: AppUserRequest): Promise<AppUser> {
     return (await api.post("/app_users", dto, withAuth())).data
   },
@@ -382,16 +558,58 @@ export const sidequestApi = {
     return (await api.get<CircleOverview>("/circles/me/overview", withAuth())).data
   },
 
+  async getCircleGroups(): Promise<CircleGroup[]> {
+    return (await api.get<CircleGroup[]>("/circles/groups", withAuth())).data
+  },
+
   async getIncomingCircleRequests(): Promise<CircleRequest[]> {
-    return (await api.get<CircleRequest[]>("/circles/requests/incoming", withAuth())).data
+    return (await api.get<CircleRequestListResponse>("/circles/requests/incoming", withAuth())).data.items
+  },
+
+  async getIncomingCircleRequestsPage(params: { q?: string; page?: number; size?: number }): Promise<CircleRequestListResponse> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params.q) queryParams.q = params.q
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<CircleRequestListResponse>("/circles/requests/incoming", {
+      ...withAuth(),
+      params: queryParams
+    })).data
   },
 
   async getOutgoingCircleRequests(): Promise<CircleRequest[]> {
-    return (await api.get<CircleRequest[]>("/circles/requests/outgoing", withAuth())).data
+    return (await api.get<CircleRequestListResponse>("/circles/requests/outgoing", withAuth())).data.items
+  },
+
+  async getOutgoingCircleRequestsPage(params: { q?: string; page?: number; size?: number }): Promise<CircleRequestListResponse> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params.q) queryParams.q = params.q
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<CircleRequestListResponse>("/circles/requests/outgoing", {
+      ...withAuth(),
+      params: queryParams
+    })).data
   },
 
   async getInviteCandidates(): Promise<CircleCandidate[]> {
-    return (await api.get<CircleCandidate[]>("/circles/candidates", withAuth())).data
+    return (await api.get<CircleCandidateListResponse>("/circles/candidates", withAuth())).data.items
+  },
+
+  async getInviteCandidatesPage(params: { page?: number; size?: number }): Promise<CircleCandidateListResponse> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<CircleCandidateListResponse>("/circles/candidates", {
+      ...withAuth(),
+      params: queryParams
+    })).data
   },
 
   async getCircleRelation(userId: number): Promise<CircleRelation> {
@@ -399,9 +617,43 @@ export const sidequestApi = {
   },
 
   async searchCircleUsers(query: string): Promise<CircleCandidate[]> {
-    return (await api.get<CircleCandidate[]>("/circles/search", {
+    return (await api.get<CircleCandidateListResponse>("/circles/search", {
       ...withAuth(),
       params: {q: query}
+    })).data.items
+  },
+
+  async searchCircleUsersPage(params: { q?: string; page?: number; size?: number }): Promise<CircleCandidateListResponse> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params.q) queryParams.q = params.q
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<CircleCandidateListResponse>("/circles/search", {
+      ...withAuth(),
+      params: queryParams
+    })).data
+  },
+
+  async getCircleConnectionsPage(params: {
+    q?: string
+    circleId?: number
+    unassigned?: boolean
+    page?: number
+    size?: number
+  }): Promise<CircleContactListResponse> {
+    const queryParams: Record<string, string | number | boolean> = {}
+
+    if (params.q) queryParams.q = params.q
+    if (params.circleId !== undefined) queryParams.circleId = params.circleId
+    if (params.unassigned !== undefined) queryParams.unassigned = params.unassigned
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<CircleContactListResponse>("/circles/connections", {
+      ...withAuth(),
+      params: queryParams
     })).data
   },
 
@@ -441,8 +693,23 @@ export const sidequestApi = {
     return (await api.put(`/circles/connections/${userId}/circles`, dto, withAuth())).data
   },
 
-  async getAdminApplications(): Promise<QuestApplication[]> {
-    return (await api.get<QuestApplication[]>("/admin/applications", withAuth())).data
+  async getAdminApplications(params: {
+    q?: string
+    status?: QuestApplicationStatus | "ALL"
+    page?: number
+    size?: number
+  }): Promise<QuestApplicationListResponse> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params.q) queryParams.q = params.q
+    if (params.status && params.status !== "ALL") queryParams.status = params.status
+    if (params.page !== undefined) queryParams.page = params.page
+    if (params.size !== undefined) queryParams.size = params.size
+
+    return (await api.get<QuestApplicationListResponse>("/admin/applications", {
+      ...withAuth(),
+      params: queryParams
+    })).data
   },
 
   async getAdminCircleOverview(): Promise<AdminCircleOverview> {

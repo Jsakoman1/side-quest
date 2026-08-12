@@ -58,6 +58,18 @@ class AppUserServiceTest {
     }
 
     @Test
+    void createAppUserRejectsInvalidAccountInput() {
+        AppUserRequestDTO dto = new AppUserRequestDTO();
+        dto.setEmail("bad-email");
+        dto.setUsername("ab");
+        dto.setPassword("short");
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> appUserService.createAppUser(dto));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    }
+
+    @Test
     void deleteUserRejectsDeletingCurrentUser() {
         AppUser currentUser = new AppUser();
         currentUser.setId(1L);
@@ -147,6 +159,26 @@ class AppUserServiceTest {
 
         assertEquals("new bio", updated.getProfileDescription());
         assertEquals("data:image/jpeg;base64,new", updated.getProfileAvatarDataUrl());
+    }
+
+    @Test
+    void updateAppUserSanitizesHtmlProfileDescription() {
+        AppUser existingUser = new AppUser();
+        existingUser.setId(1L);
+        existingUser.setEmail("old@example.com");
+        existingUser.setUsername("old");
+
+        AppUserRequestDTO dto = new AppUserRequestDTO();
+        dto.setEmail("new@example.com");
+        dto.setUsername("new-name");
+        dto.setProfileDescription("<p>Hello</p><script>alert(1)</script>");
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(existingUser));
+        when(appUserRepository.save(existingUser)).thenReturn(existingUser);
+
+        AppUser updated = appUserService.updateAppUser(1L, dto);
+
+        assertEquals("<p>Hello</p>", updated.getProfileDescription());
     }
 
     @Test

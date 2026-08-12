@@ -38,5 +38,10 @@ public class QuestResponseDTO {
     private List<String> images;
 
     private QuestStatus status;
+    private QuestViewerRelation viewerRelation;
+    private List<QuestAllowedAction> allowedActions;
+    private boolean hasApplied;
+    private Long myApplicationId;
+    private boolean canViewApplications;
 
 }

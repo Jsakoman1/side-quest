@@ -5,9 +5,12 @@ import com.sidequest.sidequest.dto.CircleBlockCreateDTO;
 import com.sidequest.sidequest.dto.CircleRelationDTO;
 import com.sidequest.sidequest.dto.CircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
+import com.sidequest.sidequest.dto.CircleSearchResultListResponseDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
+import com.sidequest.sidequest.dto.CircleRequestListResponseDTO;
 import com.sidequest.sidequest.dto.AdminCircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleContactDTO;
+import com.sidequest.sidequest.dto.CircleContactListResponseDTO;
 import com.sidequest.sidequest.dto.ConnectionCircleUpdateDTO;
 import com.sidequest.sidequest.dto.CircleGroupRequestDTO;
 import com.sidequest.sidequest.dto.CircleGroupResponseDTO;
@@ -17,8 +20,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
@@ -70,6 +71,11 @@ public class CircleController {
         circleService.deleteCircleAsAdmin(id, currentUser);
     }
 
+    @GetMapping("/groups")
+    public java.util.List<CircleGroupResponseDTO> getCircles(@AuthenticationPrincipal AppUser currentUser) {
+        return circleService.getCircles(currentUser);
+    }
+
     @PutMapping("/connections/{userId}/circles")
     public CircleContactDTO updateConnectionCircles(
             @PathVariable Long userId,
@@ -80,23 +86,49 @@ public class CircleController {
     }
 
     @GetMapping
-    public List<CircleRequestResponseDTO> getMyCircles(@AuthenticationPrincipal AppUser currentUser) {
+    public java.util.List<CircleRequestResponseDTO> getMyCircles(@AuthenticationPrincipal AppUser currentUser) {
         return circleService.getMyCircles(currentUser);
     }
 
     @GetMapping("/requests/incoming")
-    public List<CircleRequestResponseDTO> getIncomingRequests(@AuthenticationPrincipal AppUser currentUser) {
-        return circleService.getIncomingRequests(currentUser);
+    public CircleRequestListResponseDTO getIncomingRequests(
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "8") int size,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return circleService.getIncomingRequests(currentUser, query, page, size);
     }
 
     @GetMapping("/requests/outgoing")
-    public List<CircleRequestResponseDTO> getOutgoingRequests(@AuthenticationPrincipal AppUser currentUser) {
-        return circleService.getOutgoingRequests(currentUser);
+    public CircleRequestListResponseDTO getOutgoingRequests(
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "8") int size,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return circleService.getOutgoingRequests(currentUser, query, page, size);
     }
 
     @GetMapping("/candidates")
-    public List<CircleSearchResultDTO> getInviteCandidates(@AuthenticationPrincipal AppUser currentUser) {
-        return circleService.getInviteCandidates(currentUser);
+    public CircleSearchResultListResponseDTO getInviteCandidates(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "12") int size,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return circleService.getInviteCandidatesPage(currentUser, page, size);
+    }
+
+    @GetMapping("/connections")
+    public CircleContactListResponseDTO getConnections(
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "circleId", required = false) Long circleId,
+            @RequestParam(value = "unassigned", defaultValue = "false") boolean unassigned,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "8") int size,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return circleService.getConnections(currentUser, query, circleId, unassigned, page, size);
     }
 
     @GetMapping("/relations/{userId}")
@@ -108,11 +140,13 @@ public class CircleController {
     }
 
     @GetMapping("/search")
-    public List<CircleSearchResultDTO> searchCircleUsers(
+    public CircleSearchResultListResponseDTO searchCircleUsers(
             @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "12") int size,
             @AuthenticationPrincipal AppUser currentUser
     ) {
-        return circleService.searchCircleUsers(currentUser, query);
+        return circleService.searchCircleUsers(currentUser, query, page, size);
     }
 
     @PostMapping("/requests")

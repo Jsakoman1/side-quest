@@ -27,6 +27,9 @@ public interface QuestApplicationRepository extends JpaRepository<QuestApplicati
     @Query("select qa from QuestApplication qa join fetch qa.quest join fetch qa.applicant where qa.id = :id and qa.quest.id = :questId")
     Optional<QuestApplication> findByIdAndQuestId(Long id, Long questId);
 
+    @Query("select qa from QuestApplication qa join fetch qa.quest join fetch qa.applicant where qa.id = :id")
+    Optional<QuestApplication> findByIdDetailed(Long id);
+
     @Query("select qa from QuestApplication qa join fetch qa.quest join fetch qa.applicant where qa.quest.id = :questId and qa.status = :status")
     List<QuestApplication> findByQuestIdAndStatus(Long questId, QuestApplicationStatus status);
 

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -20,14 +21,15 @@ public class AppUserService {
     private final QuestRepository questRepository;
     private final PasswordEncoder passwordEncoder;
     private final QuestMgr questMgr;
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     public AppUser createAppUser(AppUserRequestDTO dto) {
-        validatePassword(dto.getPassword());
+        validateAccountInput(dto, true);
         String email = UserInputNormalizer.normalizeEmail(dto.getEmail());
         validateUniqueEmail(null, email);
         AppUser appUser = new AppUser();
         appUser.setEmail(email);
-        appUser.setUsername(dto.getUsername());
+        appUser.setUsername(normalizeUsername(dto.getUsername()));
         applyProfileDetails(appUser, dto, true);
         appUser.setRole(dto.getRole() == null ? AppUserRole.USER : dto.getRole());
         appUser.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
@@ -66,6 +68,7 @@ public class AppUserService {
     }
 
     public AppUser updateAppUser(Long id, AppUserRequestDTO dto) {
+        validateAccountInput(dto, false);
         AppUser appUser = requireAppUser(id);
         validateUniqueEmail(id, dto.getEmail());
         updateBasicProfile(appUser, dto);
@@ -74,6 +77,7 @@ public class AppUserService {
     }
 
     public AppUser updateAppUserAsAdmin(Long id, AppUserRequestDTO dto) {
+        validateAccountInput(dto, false);
         AppUser appUser = requireAppUser(id);
         validateUniqueEmail(id, dto.getEmail());
         updateBasicProfile(appUser, dto);
@@ -91,6 +95,28 @@ public class AppUserService {
         if (password == null || password.isBlank()) {
             throw ServiceErrors.badRequest("Password is required");
         }
+
+        String normalizedPassword = password.trim();
+        if (normalizedPassword.length() < 8 || normalizedPassword.length() > 100) {
+            throw ServiceErrors.badRequest("Password must be between 8 and 100 characters");
+        }
+    }
+
+    private void validateAccountInput(AppUserRequestDTO dto, boolean requirePassword) {
+        if (dto == null) {
+            throw ServiceErrors.badRequest("App user request is required");
+        }
+
+        validateEmail(dto.getEmail());
+        validateUsername(dto.getUsername());
+
+        if (requirePassword && dto.getPassword() == null) {
+            throw ServiceErrors.badRequest("Password is required");
+        }
+
+        if (requirePassword && dto.getPassword() != null) {
+            validatePassword(dto.getPassword());
+        }
     }
 
     private void validateUniqueEmail(Long id, String email) {
@@ -104,7 +130,7 @@ public class AppUserService {
     }
 
     private void updateBasicProfile(AppUser appUser, AppUserRequestDTO dto) {
-        appUser.setUsername(dto.getUsername());
+        appUser.setUsername(normalizeUsername(dto.getUsername()));
         appUser.setEmail(UserInputNormalizer.normalizeEmail(dto.getEmail()));
     }
 
@@ -120,11 +146,37 @@ public class AppUserService {
 
     private void applyProfileDetails(AppUser appUser, AppUserRequestDTO dto, boolean overwriteExisting) {
         if (overwriteExisting || dto.getProfileDescription() != null) {
-            appUser.setProfileDescription(ProfileValueNormalizer.normalizeText(dto.getProfileDescription()));
+            appUser.setProfileDescription(RichTextInputValidator.sanitize(dto.getProfileDescription()));
         }
 
         if (overwriteExisting || dto.getProfileAvatarDataUrl() != null) {
             appUser.setProfileAvatarDataUrl(ProfileValueNormalizer.normalizeAvatarDataUrl(dto.getProfileAvatarDataUrl()));
+        }
+    }
+
+    private String normalizeUsername(String username) {
+        return username == null ? null : username.trim();
+    }
+
+    private void validateEmail(String email) {
+        String normalizedEmail = UserInputNormalizer.normalizeEmail(email);
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            throw ServiceErrors.badRequest("Email is required");
+        }
+
+        if (normalizedEmail.length() > 320 || !EMAIL_PATTERN.matcher(normalizedEmail).matches()) {
+            throw ServiceErrors.badRequest("Email is invalid");
+        }
+    }
+
+    private void validateUsername(String username) {
+        String normalizedUsername = normalizeUsername(username);
+        if (normalizedUsername == null || normalizedUsername.isBlank()) {
+            throw ServiceErrors.badRequest("Username is required");
+        }
+
+        if (normalizedUsername.length() < 3 || normalizedUsername.length() > 50) {
+            throw ServiceErrors.badRequest("Username must be between 3 and 50 characters");
         }
     }
 }

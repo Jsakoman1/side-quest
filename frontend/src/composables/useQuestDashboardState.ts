@@ -2,7 +2,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue"
 import {useRoute, useRouter} from "vue-router"
 import {currentUser, isAdmin} from "../auth.ts"
 import {formatDebugInfo} from "../httpDebug.ts"
-import {type AppUser, type CircleRequest, type CircleGroup, type DashboardSummary, type Quest, type QuestApplication, type QuestNewsItem} from "../api/sidequestApi.ts"
+import {type AppUser, type CircleRequest, type CircleGroup, type DashboardSummary, type Quest, type QuestApplication, type QuestApplicationsView, type QuestNewsItem} from "../api/sidequestApi.ts"
 import {
   formatApplicationStatus,
   formatQuestStatus,
@@ -35,6 +35,8 @@ export const useQuestDashboardState = () => {
 
   const activeTab = ref<DashboardTab>("overview")
   const quests = ref<Quest[]>([])
+  const dashboardMyQuests = ref<Quest[]>([])
+  const dashboardAvailableQuests = ref<Quest[]>([])
   const myApplications = ref<QuestApplication[]>([])
   const newsItems = ref<QuestNewsItem[]>([])
   const unreadNewsCount = ref(0)
@@ -89,7 +91,7 @@ export const useQuestDashboardState = () => {
 
   const applicationMessages = ref<Record<number, string>>({})
   const proposedPrices = ref<Record<number, string>>({})
-  const applicationsByQuestId = ref<Record<number, QuestApplication[]>>({})
+  const applicationsByQuestId = ref<Record<number, QuestApplicationsView>>({})
   const openApplicationsQuestIds = ref<Record<number, boolean>>({})
   const showAllApplicationsQuestIds = ref<Record<number, boolean>>({})
   const questDisclosureRefs = ref<Record<number, HTMLDetailsElement | null>>({})
@@ -166,9 +168,21 @@ export const useQuestDashboardState = () => {
     return !!currentUser.value && quest.creatorId === currentUser.value.id
   }
 
-  const myQuests = computed(() => sortedQuests.value.filter((quest) => isMyQuest(quest)))
+  const myQuests = computed(() => {
+    if (dashboardMyQuests.value.length || !quests.value.length) {
+      return dashboardMyQuests.value
+    }
+
+    return sortedQuests.value.filter((quest) => isMyQuest(quest))
+  })
   const activeMyQuests = computed(() => myQuests.value.filter((quest) => quest.status === "ASSIGNED" || quest.status === "IN_PROGRESS"))
-  const availableQuests = computed(() => sortedQuests.value.filter((quest) => !isMyQuest(quest) && quest.status === "OPEN"))
+  const availableQuests = computed(() => {
+    if (dashboardAvailableQuests.value.length || !quests.value.length) {
+      return dashboardAvailableQuests.value
+    }
+
+    return sortedQuests.value.filter((quest) => !isMyQuest(quest) && quest.status === "OPEN")
+  })
   const adminQuests = computed(() => sortedQuests.value)
   const appliedQuestIds = computed(() => new Set(myApplications.value.map((application) => application.questId)))
 
@@ -217,7 +231,8 @@ export const useQuestDashboardState = () => {
     {id: "completed" as OverviewFocus, label: "Completed", value: completedMyQuestsCount.value, hint: "Finished jobs", tab: "create-job" as DashboardTab}
   ])
 
-  const applicationsForQuest = (questId: number) => applicationsByQuestId.value[questId] ?? []
+  const applicationsViewForQuest = (questId: number) => applicationsByQuestId.value[questId] ?? null
+  const applicationsForQuest = (questId: number) => applicationsViewForQuest(questId)?.visibleApplications ?? []
   const questForId = (questId: number) => quests.value.find((quest) => quest.id === questId) ?? null
 
   const selectedQuestDialog = computed(() => {
@@ -237,57 +252,13 @@ export const useQuestDashboardState = () => {
   })
 
   const questCreatorUsernameForQuest = (questId: number) => questForId(questId)?.creatorUsername ?? "Unknown"
-  const hasApprovedApplicationForQuest = (questId: number) => applicationsForQuest(questId).some((application) => application.status === "APPROVED")
-  const hasDeclinedApplicationsForQuest = (questId: number) => applicationsForQuest(questId).some((application) => application.status === "DECLINED")
-  const isCancelledQuest = (questId: number) => quests.value.find((quest) => quest.id === questId)?.status === "CANCELLED"
-  const showAllApplicationsForQuest = (questId: number) => !!showAllApplicationsQuestIds.value[questId]
-
-  const visibleApplicationsForQuest = (questId: number) => {
-    const questApplications = applicationsForQuest(questId)
-
-    if (hasApprovedApplicationForQuest(questId) && !showAllApplicationsForQuest(questId)) {
-      return questApplications.filter((application) => application.status === "APPROVED")
-    }
-
-    if (isCancelledQuest(questId) && !showAllApplicationsForQuest(questId)) {
-      return []
-    }
-
-    return questApplications
-  }
-
-  const hasHiddenApplicationsForQuest = (questId: number) => {
-    if (isCancelledQuest(questId)) {
-      return applicationsForQuest(questId).length > 0 && !showAllApplicationsForQuest(questId)
-    }
-
-    return hasApprovedApplicationForQuest(questId)
-      && hasDeclinedApplicationsForQuest(questId)
-      && !showAllApplicationsForQuest(questId)
-  }
-
-  const shouldShowApplicationReveal = (questId: number) => {
-    if (isCancelledQuest(questId)) {
-      return applicationsForQuest(questId).length > 0
-    }
-
-    return hasApprovedApplicationForQuest(questId) && hasDeclinedApplicationsForQuest(questId)
-  }
-
-  const applicationRevealLabel = (questId: number) => {
-    if (isCancelledQuest(questId)) {
-      return showAllApplicationsForQuest(questId) ? "Hide all applications" : "Show all applications"
-    }
-
-    if (hasApprovedApplicationForQuest(questId)) {
-      return showAllApplicationsForQuest(questId) ? "Hide declined" : "Show declined"
-    }
-
-    return "Show"
-  }
+  const featuredApplicationForQuest = (questId: number) => applicationsViewForQuest(questId)?.featuredApplication ?? null
+  const hiddenApplicationsCountForQuest = (questId: number) => applicationsViewForQuest(questId)?.hiddenApplicationsCount ?? 0
+  const canRevealHiddenApplicationsForQuest = (questId: number) => applicationsViewForQuest(questId)?.canRevealHiddenApplications ?? false
+  const showAllApplicationsForQuest = (questId: number) => applicationsViewForQuest(questId)?.showingAllApplications ?? false
+  const applicationRevealLabel = (questId: number) => applicationsViewForQuest(questId)?.revealLabel ?? "Show applications"
 
   const hasAppliedToQuest = (questId: number) => appliedQuestIds.value.has(questId)
-
   const formatDateTime = (value: string) => formatInstantForDisplay(value)
   const formatQuestTermLabel = (quest: Quest) => formatQuestTerm(quest.scheduledAt, quest.endsAt, quest.termFixed)
   const formatQuestTermFromParts = (scheduledAt: string | null | undefined, endsAt: string | null | undefined, termFixed: boolean) => formatQuestTerm(scheduledAt, endsAt, termFixed)
@@ -557,10 +528,6 @@ export const useQuestDashboardState = () => {
     }
   })
 
-  const toggleApplicationRevealForQuest = (questId: number) => {
-    showAllApplicationsQuestIds.value[questId] = !showAllApplicationsQuestIds.value[questId]
-  }
-
   const startEditingApplication = (application: QuestApplication) => {
     editingApplicationId.value = application.id
     editApplicationMessage.value = application.message
@@ -661,6 +628,8 @@ export const useQuestDashboardState = () => {
     sectionTitle,
     sectionSubtitle,
     quests,
+    dashboardMyQuests,
+    dashboardAvailableQuests,
     myApplications,
     newsItems,
     unreadNewsCount,
@@ -769,13 +738,11 @@ export const useQuestDashboardState = () => {
     selectedQuestDialog,
     selectedApplicationDialog,
     questCreatorUsernameForQuest,
-    hasApprovedApplicationForQuest,
-    hasDeclinedApplicationsForQuest,
-    isCancelledQuest,
     showAllApplicationsForQuest,
-    visibleApplicationsForQuest,
-    hasHiddenApplicationsForQuest,
-    shouldShowApplicationReveal,
+    applicationsViewForQuest,
+    featuredApplicationForQuest,
+    hiddenApplicationsCountForQuest,
+    canRevealHiddenApplicationsForQuest,
     applicationRevealLabel,
     hasAppliedToQuest,
     formatStatus: formatQuestStatus,
@@ -816,7 +783,6 @@ export const useQuestDashboardState = () => {
     toggleApplicationsForQuest,
     toggleQuestDisclosure,
     handleDocumentClick,
-    toggleApplicationRevealForQuest,
     startEditingApplication,
     handleApplicationDisclosureToggle,
     cancelEditingApplication,

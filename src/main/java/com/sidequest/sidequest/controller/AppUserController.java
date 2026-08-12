@@ -2,9 +2,11 @@ package com.sidequest.sidequest.controller;
 
 import com.sidequest.sidequest.dto.AppUserRequestDTO;
 import com.sidequest.sidequest.dto.AppUserResponseDTO;
+import com.sidequest.sidequest.dto.UserProfileViewDTO;
 import com.sidequest.sidequest.mapper.AppUserMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.service.AppUserService;
+import com.sidequest.sidequest.service.UserProfileViewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,6 +21,7 @@ import java.util.List;
 public class AppUserController {
     private final AppUserService appUserService;
     private final AppUserMgr appUserMgr;
+    private final UserProfileViewService userProfileViewService;
 
     @PostMapping
     public AppUserResponseDTO createAppUser(@Valid @RequestBody AppUserRequestDTO dto) {
@@ -47,6 +50,14 @@ public class AppUserController {
                 appUserService.countQuestsByCreatorId(appUser.getId()),
                 appUserService.getOpenQuestsByCreatorId(appUser.getId())
         );
+    }
+
+    @GetMapping("/{id}/profile-view")
+    public UserProfileViewDTO getProfileView(
+            @PathVariable long id,
+            @AuthenticationPrincipal AppUser currentUser
+    ) {
+        return userProfileViewService.getProfileView(id, currentUser);
     }
 
     @DeleteMapping("/{id}")

@@ -2,11 +2,11 @@ package com.sidequest.sidequest.controller;
 
 import com.sidequest.sidequest.dto.QuestRequestDTO;
 import com.sidequest.sidequest.dto.QuestListResponseDTO;
+import com.sidequest.sidequest.dto.QuestDetailResponseDTO;
+import com.sidequest.sidequest.dto.QuestListPreset;
 import com.sidequest.sidequest.dto.QuestResponseDTO;
-import com.sidequest.sidequest.mapper.QuestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.QuestAudience;
-import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestStatus;
 import com.sidequest.sidequest.service.QuestService;
 import jakarta.validation.Valid;
@@ -24,19 +24,15 @@ import java.util.List;
 public class QuestController {
 
     private final QuestService questService;
-    private final QuestMgr questMgr;
 
     @PostMapping
     public QuestResponseDTO createQuest(@Valid @RequestBody QuestRequestDTO dto, @AuthenticationPrincipal AppUser currentUser) {
-        return toDto(questService.createQuest(dto, currentUser));
+        return questService.toResponse(questService.createQuest(dto, currentUser), currentUser);
     }
 
     @GetMapping
     public List<QuestResponseDTO> getAllQuests(@AuthenticationPrincipal AppUser currentUser) {
-        return questService.getAllQuests(currentUser)
-                .stream()
-                .map(this::toDto)
-                .toList();
+        return questService.getAllQuestResponses(currentUser);
     }
 
     @GetMapping("/search")
@@ -57,9 +53,31 @@ public class QuestController {
         return questService.searchQuests(currentUser, q, status, audience, dateFrom, dateTo, excludeMine, withImages, scheduledOnly, sort, page, size);
     }
 
+    @GetMapping("/presets/{preset}")
+    public QuestListResponseDTO getQuestPreset(
+            @PathVariable QuestListPreset preset,
+            @AuthenticationPrincipal AppUser currentUser,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) QuestAudience audience,
+            @RequestParam(required = false) LocalDate dateFrom,
+            @RequestParam(required = false) LocalDate dateTo,
+            @RequestParam(required = false) Boolean withImages,
+            @RequestParam(required = false) Boolean scheduledOnly,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        return questService.getQuestListPreset(preset, currentUser, q, audience, dateFrom, dateTo, withImages, scheduledOnly, sort, page, size);
+    }
+
     @GetMapping("/{id}")
     public QuestResponseDTO getQuestById(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
-        return toDto(questService.getQuestById(id, currentUser));
+        return questService.getQuestResponseById(id, currentUser);
+    }
+
+    @GetMapping("/{id}/detail")
+    public QuestDetailResponseDTO getQuestDetailById(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
+        return questService.getQuestDetailResponseById(id, currentUser);
     }
 
     @DeleteMapping("/{id}")
@@ -69,31 +87,27 @@ public class QuestController {
 
     @PutMapping("/{id}")
     public QuestResponseDTO updateQuest(@PathVariable long id, @Valid @RequestBody QuestRequestDTO dto, @AuthenticationPrincipal AppUser currentUser) {
-        return toDto(questService.updateQuest(id, dto, currentUser));
+        return questService.toResponse(questService.updateQuest(id, dto, currentUser), currentUser);
     }
 
     @PatchMapping("/{id}/start")
     public QuestResponseDTO startQuest(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
-        return toDto(questService.startQuest(id, currentUser));
+        return questService.toResponse(questService.startQuest(id, currentUser), currentUser);
     }
 
     @PatchMapping("/{id}/complete")
     public QuestResponseDTO completeQuest(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
-        return toDto(questService.completeQuest(id, currentUser));
+        return questService.toResponse(questService.completeQuest(id, currentUser), currentUser);
     }
 
     @PatchMapping("/{id}/term/confirm")
     public QuestResponseDTO confirmQuestTermChange(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
-        return toDto(questService.confirmQuestTermChange(id, currentUser));
+        return questService.toResponse(questService.confirmQuestTermChange(id, currentUser), currentUser);
     }
 
     @PatchMapping("/{id}/term/reject")
     public QuestResponseDTO rejectQuestTermChange(@PathVariable long id, @AuthenticationPrincipal AppUser currentUser) {
-        return toDto(questService.rejectQuestTermChange(id, currentUser));
-    }
-
-    private QuestResponseDTO toDto(Quest quest) {
-        return questMgr.toDto(quest);
+        return questService.toResponse(questService.rejectQuestTermChange(id, currentUser), currentUser);
     }
 
 }

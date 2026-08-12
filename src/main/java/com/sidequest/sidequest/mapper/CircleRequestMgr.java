@@ -2,6 +2,7 @@ package com.sidequest.sidequest.mapper;
 
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
 import com.sidequest.sidequest.model.CircleRequest;
+import com.sidequest.sidequest.service.RichTextInputValidator;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,11 +17,11 @@ public class CircleRequestMgr {
                 .id(circleRequest.getId())
                 .requesterId(circleRequest.getRequester().getId())
                 .requesterUsername(circleRequest.getRequester().getUsername())
-                .requesterProfileDescription(circleRequest.getRequester().getProfileDescription())
+                .requesterProfileDescription(RichTextInputValidator.sanitize(circleRequest.getRequester().getProfileDescription()))
                 .requesterProfileAvatarDataUrl(circleRequest.getRequester().getProfileAvatarDataUrl())
                 .recipientId(circleRequest.getRecipient().getId())
                 .recipientUsername(circleRequest.getRecipient().getUsername())
-                .recipientProfileDescription(circleRequest.getRecipient().getProfileDescription())
+                .recipientProfileDescription(RichTextInputValidator.sanitize(circleRequest.getRecipient().getProfileDescription()))
                 .recipientProfileAvatarDataUrl(circleRequest.getRecipient().getProfileAvatarDataUrl())
                 .createdAt(circleRequest.getCreatedAt())
                 .acceptedAt(circleRequest.getAcceptedAt())

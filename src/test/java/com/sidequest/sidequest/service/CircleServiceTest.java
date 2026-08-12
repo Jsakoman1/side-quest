@@ -5,9 +5,12 @@ import com.sidequest.sidequest.dto.CircleBlockCreateDTO;
 import com.sidequest.sidequest.dto.CircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleRelationDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
+import com.sidequest.sidequest.dto.CircleRequestListResponseDTO;
 import com.sidequest.sidequest.dto.CircleRelationStatus;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
+import com.sidequest.sidequest.dto.CircleSearchResultListResponseDTO;
 import com.sidequest.sidequest.dto.CircleContactDTO;
+import com.sidequest.sidequest.dto.CircleContactListResponseDTO;
 import com.sidequest.sidequest.dto.ConnectionCircleUpdateDTO;
 import com.sidequest.sidequest.mapper.CircleRequestMgr;
 import com.sidequest.sidequest.model.AppUser;
@@ -81,19 +84,15 @@ class CircleServiceTest {
     void getOverviewCombinesCircleCollections() {
         AppUser currentUser = createUser(1L, "requester");
         when(circleRequestRepository.findAcceptedByUserId(1L)).thenReturn(List.of());
-        when(circleGroupRepository.findAllDetailedByOwnerId(1L)).thenReturn(List.of());
-        when(circleMembershipRepository.findByCircleOwnerId(1L)).thenReturn(List.of());
         when(circleRequestRepository.findIncomingPendingByRecipientId(1L)).thenReturn(List.of());
         when(circleRequestRepository.findOutgoingPendingByRequesterId(1L)).thenReturn(List.of());
-        when(appUserRepository.findAll()).thenReturn(List.of(currentUser));
 
         CircleOverviewDTO result = circleService.getOverview(currentUser);
 
-        assertEquals(List.of(), result.getCircles());
-        assertEquals(List.of(), result.getConnections());
-        assertEquals(List.of(), result.getIncomingRequests());
-        assertEquals(List.of(), result.getOutgoingRequests());
-        assertEquals(List.of(), result.getInviteCandidates());
+        assertEquals(0, result.getConnectionCount());
+        assertEquals(0, result.getUnassignedConnectionCount());
+        assertEquals(0, result.getIncomingRequestCount());
+        assertEquals(0, result.getOutgoingRequestCount());
     }
 
     @Test
@@ -270,7 +269,7 @@ class CircleServiceTest {
         request.setRequester(currentUser);
         request.setRecipient(candidate);
 
-        when(appUserRepository.searchByUsernameOrEmail("cand")).thenReturn(List.of(candidate));
+        when(appUserRepository.findAll()).thenReturn(List.of(currentUser, candidate));
         when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.of(request));
 
         List<CircleSearchResultDTO> result = circleService.searchCircleUsers(currentUser, "cand");
@@ -309,7 +308,7 @@ class CircleServiceTest {
         request.setBlockedAt(Instant.now());
         request.setBlockedBy(currentUser);
 
-        when(appUserRepository.searchByUsernameOrEmail("cand")).thenReturn(List.of(candidate));
+        when(appUserRepository.findAll()).thenReturn(List.of(currentUser, candidate));
         when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.of(request));
 
         List<CircleSearchResultDTO> result = circleService.searchCircleUsers(currentUser, "cand");
@@ -317,6 +316,101 @@ class CircleServiceTest {
         assertEquals(1, result.size());
         assertEquals(CircleRelationStatus.BLOCKED, result.getFirst().getRelationStatus());
         assertEquals(true, result.getFirst().isBlockedByCurrentUser());
+    }
+
+    @Test
+    void getConnectionsFiltersByCircleAndPaginatesResults() {
+        AppUser currentUser = createUser(1L, "requester");
+        AppUser contactOne = createUser(2L, "alice");
+        AppUser contactTwo = createUser(3L, "bob");
+
+        CircleGroup friends = new CircleGroup();
+        friends.setId(10L);
+        friends.setName("Friends");
+
+        CircleRequest relationOne = new CircleRequest();
+        relationOne.setId(20L);
+        relationOne.setRequester(currentUser);
+        relationOne.setRecipient(contactOne);
+        relationOne.setAcceptedAt(Instant.now());
+
+        CircleRequest relationTwo = new CircleRequest();
+        relationTwo.setId(21L);
+        relationTwo.setRequester(currentUser);
+        relationTwo.setRecipient(contactTwo);
+        relationTwo.setAcceptedAt(Instant.now());
+
+        CircleMembership membership = new CircleMembership();
+        membership.setCircle(friends);
+        membership.setMember(contactOne);
+
+        when(circleMembershipRepository.findByCircleOwnerId(1L)).thenReturn(List.of(membership));
+        when(circleRequestRepository.findAcceptedByUserId(1L)).thenReturn(List.of(relationOne, relationTwo));
+
+        CircleContactListResponseDTO result = circleService.getConnections(currentUser, "alice", null, false, 0, 1);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals(2L, result.getItems().getFirst().getUserId());
+        assertEquals(1, result.getTotalItems());
+        assertEquals(1, result.getTotalPages());
+    }
+
+    @Test
+    void incomingRequestsCanBeFilteredAndPagedOnBackend() {
+        AppUser currentUser = createUser(1L, "requester");
+        AppUser alice = createUser(2L, "alice");
+        AppUser bob = createUser(3L, "bob");
+
+        CircleRequest requestOne = new CircleRequest();
+        requestOne.setId(11L);
+        requestOne.setRequester(alice);
+        requestOne.setRecipient(currentUser);
+
+        CircleRequest requestTwo = new CircleRequest();
+        requestTwo.setId(12L);
+        requestTwo.setRequester(bob);
+        requestTwo.setRecipient(currentUser);
+
+        CircleRequestResponseDTO first = CircleRequestResponseDTO.builder()
+                .id(11L)
+                .requesterUsername("alice")
+                .requesterProfileDescription("Local helper")
+                .build();
+        CircleRequestResponseDTO second = CircleRequestResponseDTO.builder()
+                .id(12L)
+                .requesterUsername("bob")
+                .requesterProfileDescription("Remote mentor")
+                .build();
+
+        when(circleRequestRepository.findIncomingPendingByRecipientId(1L)).thenReturn(List.of(requestOne, requestTwo));
+        when(circleRequestMgr.toDto(requestOne)).thenReturn(first);
+        when(circleRequestMgr.toDto(requestTwo)).thenReturn(second);
+
+        CircleRequestListResponseDTO result = circleService.getIncomingRequests(currentUser, "helper", 0, 1);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals(1, result.getTotalItems());
+        assertEquals(1, result.getTotalPages());
+    }
+
+    @Test
+    void searchCircleUsersMatchesProfileDescriptionAndPaginatesResults() {
+        AppUser currentUser = createUser(1L, "requester");
+        AppUser helper = createUser(2L, "helper");
+        helper.setProfileDescription("Local helper for errands");
+        AppUser other = createUser(3L, "other");
+        other.setProfileDescription("Something else");
+
+        when(appUserRepository.findAll()).thenReturn(List.of(currentUser, helper, other));
+        when(circleRequestRepository.findBetweenUsers(1L, 2L)).thenReturn(Optional.empty());
+        when(circleRequestRepository.findBetweenUsers(1L, 3L)).thenReturn(Optional.empty());
+
+        CircleSearchResultListResponseDTO result = circleService.searchCircleUsers(currentUser, "helper", 0, 1);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals(2L, result.getItems().getFirst().getId());
+        assertEquals(1, result.getTotalItems());
+        assertEquals(1, result.getTotalPages());
     }
 
     @Test

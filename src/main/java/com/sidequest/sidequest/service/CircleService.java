@@ -6,8 +6,11 @@ import com.sidequest.sidequest.dto.CircleRelationDTO;
 import com.sidequest.sidequest.dto.CircleRelationStatus;
 import com.sidequest.sidequest.dto.CircleOverviewDTO;
 import com.sidequest.sidequest.dto.CircleContactDTO;
+import com.sidequest.sidequest.dto.CircleContactListResponseDTO;
 import com.sidequest.sidequest.dto.CircleRequestResponseDTO;
+import com.sidequest.sidequest.dto.CircleRequestListResponseDTO;
 import com.sidequest.sidequest.dto.CircleSearchResultDTO;
+import com.sidequest.sidequest.dto.CircleSearchResultListResponseDTO;
 import com.sidequest.sidequest.dto.AdminCircleOverviewDTO;
 import com.sidequest.sidequest.dto.AdminCircleGroupResponseDTO;
 import com.sidequest.sidequest.dto.ConnectionCircleUpdateDTO;
@@ -18,6 +21,7 @@ import com.sidequest.sidequest.mapper.CircleRequestMgr;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.model.CircleRequest;
+import com.sidequest.sidequest.service.RichTextInputValidator;
 import com.sidequest.sidequest.model.CircleGroup;
 import com.sidequest.sidequest.model.CircleMembership;
 import com.sidequest.sidequest.repository.AppUserRepository;
@@ -78,12 +82,15 @@ public class CircleService {
     }
 
     public CircleOverviewDTO getOverview(AppUser currentUser) {
+        List<CircleContactDTO> connections = loadConnections(currentUser);
+        List<CircleRequestResponseDTO> incomingRequests = loadIncomingRequests(currentUser);
+        List<CircleRequestResponseDTO> outgoingRequests = loadOutgoingRequests(currentUser);
+
         return CircleOverviewDTO.builder()
-                .circles(getCircles(currentUser))
-                .connections(getConnections(currentUser))
-                .incomingRequests(getIncomingRequests(currentUser))
-                .outgoingRequests(getOutgoingRequests(currentUser))
-                .inviteCandidates(getInviteCandidates(currentUser))
+                .connectionCount(connections.size())
+                .unassignedConnectionCount(connections.stream().filter(connection -> connection.getCircleIds().isEmpty()).count())
+                .incomingRequestCount(incomingRequests.size())
+                .outgoingRequestCount(outgoingRequests.size())
                 .build();
     }
 
@@ -107,7 +114,7 @@ public class CircleService {
                                 .map(member -> CircleMemberDTO.builder()
                                         .userId(member.getId())
                                         .username(member.getUsername())
-                                        .profileDescription(member.getProfileDescription())
+                                        .profileDescription(RichTextInputValidator.sanitize(member.getProfileDescription()))
                                         .profileAvatarDataUrl(member.getProfileAvatarDataUrl())
                                         .build())
                                 .toList())
@@ -116,6 +123,19 @@ public class CircleService {
     }
 
     public List<CircleContactDTO> getConnections(AppUser currentUser) {
+        return loadConnections(currentUser);
+    }
+
+    public CircleContactListResponseDTO getConnections(AppUser currentUser, String query, Long circleId, boolean unassigned, int page, int size) {
+        List<CircleContactDTO> connections = loadConnections(currentUser).stream()
+                .filter(connection -> matchesConnectionQuery(connection, query))
+                .filter(connection -> matchesConnectionFilter(connection, circleId, unassigned))
+                .toList();
+
+        return buildCircleContactListResponse(connections, page, size);
+    }
+
+    private List<CircleContactDTO> loadConnections(AppUser currentUser) {
         Map<Long, List<CircleMembership>> membershipsByUserId = circleMembershipRepository.findByCircleOwnerId(currentUser.getId())
                 .stream()
                 .collect(Collectors.groupingBy(membership -> membership.getMember().getId()));
@@ -135,7 +155,7 @@ public class CircleService {
                 .relationId(relation.getId())
                 .userId(contact.getId())
                 .username(contact.getUsername())
-                .profileDescription(contact.getProfileDescription())
+                .profileDescription(RichTextInputValidator.sanitize(contact.getProfileDescription()))
                 .profileAvatarDataUrl(contact.getProfileAvatarDataUrl())
                 .circleIds(memberships.stream().map(membership -> membership.getCircle().getId()).toList())
                 .circleNames(memberships.stream().map(membership -> membership.getCircle().getName()).toList())
@@ -149,7 +169,7 @@ public class CircleService {
                 .map(member -> CircleMemberDTO.builder()
                         .userId(member.getId())
                         .username(member.getUsername())
-                        .profileDescription(member.getProfileDescription())
+                        .profileDescription(RichTextInputValidator.sanitize(member.getProfileDescription()))
                         .profileAvatarDataUrl(member.getProfileAvatarDataUrl())
                         .build())
                 .toList();
@@ -163,6 +183,18 @@ public class CircleService {
     }
 
     public List<CircleRequestResponseDTO> getIncomingRequests(AppUser currentUser) {
+        return loadIncomingRequests(currentUser);
+    }
+
+    public CircleRequestListResponseDTO getIncomingRequests(AppUser currentUser, String query, int page, int size) {
+        List<CircleRequestResponseDTO> requests = loadIncomingRequests(currentUser).stream()
+                .filter(request -> matchesRequestQuery(request.getRequesterUsername(), request.getRequesterProfileDescription(), query))
+                .toList();
+
+        return buildCircleRequestListResponse(requests, page, size);
+    }
+
+    private List<CircleRequestResponseDTO> loadIncomingRequests(AppUser currentUser) {
         return circleRequestRepository.findIncomingPendingByRecipientId(currentUser.getId())
                 .stream()
                 .map(circleRequestMgr::toDto)
@@ -170,6 +202,18 @@ public class CircleService {
     }
 
     public List<CircleRequestResponseDTO> getOutgoingRequests(AppUser currentUser) {
+        return loadOutgoingRequests(currentUser);
+    }
+
+    public CircleRequestListResponseDTO getOutgoingRequests(AppUser currentUser, String query, int page, int size) {
+        List<CircleRequestResponseDTO> requests = loadOutgoingRequests(currentUser).stream()
+                .filter(request -> matchesRequestQuery(request.getRecipientUsername(), request.getRecipientProfileDescription(), query))
+                .toList();
+
+        return buildCircleRequestListResponse(requests, page, size);
+    }
+
+    private List<CircleRequestResponseDTO> loadOutgoingRequests(AppUser currentUser) {
         return circleRequestRepository.findOutgoingPendingByRequesterId(currentUser.getId())
                 .stream()
                 .map(circleRequestMgr::toDto)
@@ -177,13 +221,34 @@ public class CircleService {
     }
 
     public List<CircleSearchResultDTO> getInviteCandidates(AppUser currentUser) {
-        return appUserRepository.findAll().stream()
+        return getInviteCandidatesPage(currentUser, 0, 12).getItems();
+    }
+
+    public CircleSearchResultListResponseDTO searchCircleUsers(AppUser currentUser, String query, int page, int size) {
+        String normalizedQuery = normalizeSearchQuery(query);
+        if (normalizedQuery.length() < 2) {
+            return buildCircleSearchResultListResponse(List.of(), page, size);
+        }
+
+        List<CircleSearchResultDTO> results = appUserRepository.findAll().stream()
+                .filter(candidate -> !candidate.getId().equals(currentUser.getId()))
+                .map(candidate -> toSearchResult(currentUser, candidate))
+                .filter(candidate -> matchesCandidateQuery(candidate, normalizedQuery))
+                .sorted(Comparator.comparing(CircleSearchResultDTO::getUsername, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        return buildCircleSearchResultListResponse(results, page, size);
+    }
+
+    public CircleSearchResultListResponseDTO getInviteCandidatesPage(AppUser currentUser, int page, int size) {
+        List<CircleSearchResultDTO> results = appUserRepository.findAll().stream()
                 .filter(candidate -> !candidate.getId().equals(currentUser.getId()))
                 .map(candidate -> toSearchResult(currentUser, candidate))
                 .filter(candidate -> candidate.getRelationStatus() == CircleRelationStatus.NONE)
                 .sorted(Comparator.comparing(CircleSearchResultDTO::getUsername, String.CASE_INSENSITIVE_ORDER))
-                .limit(12)
                 .toList();
+
+        return buildCircleSearchResultListResponse(results, page, size);
     }
 
     public CircleRelationDTO getRelationWithUser(AppUser currentUser, Long otherUserId) {
@@ -203,19 +268,7 @@ public class CircleService {
     }
 
     public List<CircleSearchResultDTO> searchCircleUsers(AppUser currentUser, String query) {
-        String normalizedQuery = SearchQueryNormalizer.normalize(query);
-
-        if (normalizedQuery.length() < 2) {
-            return List.of();
-        }
-
-        List<AppUser> matches = appUserRepository.searchByUsernameOrEmail(normalizedQuery);
-
-        return matches.stream()
-                .filter(candidate -> !candidate.getId().equals(currentUser.getId()))
-                .map(candidate -> toSearchResult(currentUser, candidate))
-                .sorted(Comparator.comparing(CircleSearchResultDTO::getUsername, String.CASE_INSENSITIVE_ORDER))
-                .toList();
+        return searchCircleUsers(currentUser, query, 0, Integer.MAX_VALUE).getItems();
     }
 
     @Transactional
@@ -516,12 +569,121 @@ public class CircleService {
         return CircleSearchResultDTO.builder()
                 .id(candidate.getId())
                 .username(candidate.getUsername())
-                .profileDescription(candidate.getProfileDescription())
+                .profileDescription(RichTextInputValidator.sanitize(candidate.getProfileDescription()))
                 .profileAvatarDataUrl(candidate.getProfileAvatarDataUrl())
                 .email(candidate.getEmail())
                 .relationStatus(resolveRelationStatus(relation, currentUser.getId()))
                 .blockedByCurrentUser(isBlockedByCurrentUser(relation, currentUser.getId()))
                 .build();
+    }
+
+    private CircleContactListResponseDTO buildCircleContactListResponse(List<CircleContactDTO> items, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, size);
+        int totalItems = items.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / safeSize));
+        int start = Math.min(safePage * safeSize, totalItems);
+        int end = Math.min(start + safeSize, totalItems);
+
+        return CircleContactListResponseDTO.builder()
+                .items(items.subList(start, end))
+                .page(safePage)
+                .size(safeSize)
+                .totalItems(totalItems)
+                .totalPages(totalPages)
+                .build();
+    }
+
+    private CircleRequestListResponseDTO buildCircleRequestListResponse(List<CircleRequestResponseDTO> items, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, size);
+        int totalItems = items.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / safeSize));
+        int start = Math.min(safePage * safeSize, totalItems);
+        int end = Math.min(start + safeSize, totalItems);
+
+        return CircleRequestListResponseDTO.builder()
+                .items(items.subList(start, end))
+                .page(safePage)
+                .size(safeSize)
+                .totalItems(totalItems)
+                .totalPages(totalPages)
+                .build();
+    }
+
+    private CircleSearchResultListResponseDTO buildCircleSearchResultListResponse(List<CircleSearchResultDTO> items, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, size);
+        int totalItems = items.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / safeSize));
+        int start = Math.min(safePage * safeSize, totalItems);
+        int end = Math.min(start + safeSize, totalItems);
+
+        return CircleSearchResultListResponseDTO.builder()
+                .items(items.subList(start, end))
+                .page(safePage)
+                .size(safeSize)
+                .totalItems(totalItems)
+                .totalPages(totalPages)
+                .build();
+    }
+
+    private boolean matchesConnectionQuery(CircleContactDTO connection, String query) {
+        String normalizedQuery = normalizeSearchQuery(query);
+        if (normalizedQuery.isBlank()) {
+            return true;
+        }
+
+        String haystack = String.join(" ",
+                connection.getUsername(),
+                connection.getProfileDescription() == null ? "" : connection.getProfileDescription(),
+                String.join(" ", connection.getCircleNames())
+        ).toLowerCase();
+        return haystack.contains(normalizedQuery);
+    }
+
+    private boolean matchesConnectionFilter(CircleContactDTO connection, Long circleId, boolean unassigned) {
+        List<Long> circleIds = connection.getCircleIds();
+
+        if (circleId != null) {
+            return circleIds.contains(circleId);
+        }
+
+        if (unassigned) {
+            return circleIds.isEmpty();
+        }
+
+        return true;
+    }
+
+    private boolean matchesRequestQuery(String username, String profileDescription, String query) {
+        String normalizedQuery = normalizeSearchQuery(query);
+        if (normalizedQuery.isBlank()) {
+            return true;
+        }
+
+        String haystack = String.join(" ",
+                username == null ? "" : username,
+                profileDescription == null ? "" : profileDescription
+        ).toLowerCase();
+        return haystack.contains(normalizedQuery);
+    }
+
+    private boolean matchesCandidateQuery(CircleSearchResultDTO candidate, String normalizedQuery) {
+        if (normalizedQuery.isBlank()) {
+            return true;
+        }
+
+        String haystack = String.join(" ",
+                candidate.getUsername() == null ? "" : candidate.getUsername(),
+                candidate.getEmail() == null ? "" : candidate.getEmail(),
+                candidate.getProfileDescription() == null ? "" : candidate.getProfileDescription()
+        ).toLowerCase();
+        return haystack.contains(normalizedQuery);
+    }
+
+    private String normalizeSearchQuery(String query) {
+        return SearchQueryNormalizer.normalize(query).toLowerCase();
     }
 
     private CircleRelationStatus resolveRelationStatus(Optional<CircleRequest> relation, Long currentUserId) {

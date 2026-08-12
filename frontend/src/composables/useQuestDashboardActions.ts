@@ -5,92 +5,64 @@ import {buildRequestDebugInfo} from "../httpDebug.ts"
 import {isAdmin, currentUser} from "../auth.ts"
 import {compressImageFile, compressProfileAvatar} from "../shared/imageCompression.ts"
 import {richTextHasContent} from "../shared/richText.ts"
-import {canApplyToQuest, canEditQuest} from "../lib/questAccess.ts"
 
 export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const refreshDashboardData = async () => {
     state.resetErrorState()
-    await Promise.all([
-      fetchQuests(),
-      fetchMyApplications(),
-      fetchNews(),
-      fetchDashboardSummary(),
-      fetchCircleOverview(),
-      fetchAppUsers()
-    ])
+    await fetchDashboard()
   }
 
-  const fetchQuests = async () => {
+  const fetchDashboard = async () => {
     state.isLoadingQuests.value = true
+    state.isLoadingApplications.value = true
+    state.isLoadingNews.value = true
+    state.isLoadingUsers.value = isAdmin()
     state.questsError.value = ""
     state.questsErrorDetails.value = []
-
-    try {
-      state.quests.value = await sidequestApi.getQuests()
-    } catch (error) {
-      state.questsError.value = "Could not load quests."
-      state.questsErrorDetails.value = buildRequestDebugInfo(`${API_BASE_URL}/quests`, "GET", error)
-    } finally {
-      state.isLoadingQuests.value = false
-    }
-  }
-
-  const fetchMyApplications = async () => {
-    state.isLoadingApplications.value = true
     state.applicationsError.value = ""
     state.applicationsErrorDetails.value = []
-
-    try {
-      state.myApplications.value = await sidequestApi.getMyApplications()
-    } catch (error) {
-      state.applicationsError.value = "Could not load your applications."
-      state.applicationsErrorDetails.value = buildRequestDebugInfo(`${API_BASE_URL}/quests/applications/me`, "GET", error)
-    } finally {
-      state.isLoadingApplications.value = false
-    }
-  }
-
-  const fetchNews = async () => {
-    state.isLoadingNews.value = true
     state.newsError.value = ""
     state.newsErrorDetails.value = []
+    state.usersError.value = ""
+    state.usersErrorDetails.value = []
 
     try {
-      state.newsItems.value = await sidequestApi.getMyNews()
+      const dashboard = await sidequestApi.getDashboard()
+      state.quests.value = dashboard.quests
+      state.dashboardMyQuests.value = dashboard.myQuests
+      state.dashboardAvailableQuests.value = dashboard.availableQuests
+      state.myApplications.value = dashboard.myApplications
+      state.newsItems.value = dashboard.recentNews
+      state.dashboardSummary.value = dashboard.summary
+      state.unreadNewsCount.value = dashboard.summary.unreadNewsCount
+      state.incomingCircleRequests.value = dashboard.incomingCircleRequests
+      state.circles.value = dashboard.circles
+      state.appUsers.value = dashboard.appUsers
     } catch (error) {
-      state.newsError.value = "Could not load updates."
-      state.newsErrorDetails.value = buildRequestDebugInfo(`${API_BASE_URL}/news/me`, "GET", error)
-    } finally {
-      state.isLoadingNews.value = false
-    }
-  }
-
-  const fetchDashboardSummary = async () => {
-    try {
-      const summary = await sidequestApi.getDashboardSummary()
-      state.dashboardSummary.value = summary
-      state.unreadNewsCount.value = summary.unreadNewsCount
-    } catch {
+      state.questsError.value = "Could not load dashboard."
+      state.questsErrorDetails.value = buildRequestDebugInfo(`${API_BASE_URL}/dashboard/me`, "GET", error)
+      state.quests.value = []
+      state.dashboardMyQuests.value = []
+      state.dashboardAvailableQuests.value = []
+      state.myApplications.value = []
+      state.newsItems.value = []
       state.dashboardSummary.value = null
       state.unreadNewsCount.value = 0
-    }
-  }
-
-  const fetchCircleOverview = async () => {
-    try {
-      const overview = await sidequestApi.getCircleOverview()
-      state.incomingCircleRequests.value = overview.incomingRequests
-      state.circles.value = overview.circles
-    } catch {
       state.incomingCircleRequests.value = []
       state.circles.value = []
+      state.appUsers.value = []
+    } finally {
+      state.isLoadingQuests.value = false
+      state.isLoadingApplications.value = false
+      state.isLoadingNews.value = false
+      state.isLoadingUsers.value = false
     }
   }
 
   const markNewsAsRead = async () => {
     try {
       await sidequestApi.markMyNewsAsRead()
-      await Promise.all([fetchNews(), fetchDashboardSummary()])
+      await fetchDashboard()
       state.showFeedback("Updates marked as read.", "success")
     } catch {
       state.showFeedback("Could not mark updates as read.", "error")
@@ -100,28 +72,9 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
   const markNewsItemAsRead = async (newsId: number) => {
     try {
       await sidequestApi.markMyNewsItemAsRead(newsId)
-      await Promise.all([fetchNews(), fetchDashboardSummary()])
+      await fetchDashboard()
     } catch {
       state.showFeedback("Could not mark update as read.", "error")
-    }
-  }
-
-  const fetchAppUsers = async () => {
-    if (!isAdmin()) {
-      return
-    }
-
-    state.isLoadingUsers.value = true
-    state.usersError.value = ""
-    state.usersErrorDetails.value = []
-
-    try {
-      state.appUsers.value = await sidequestApi.getAppUsers()
-    } catch (error) {
-      state.usersError.value = "Could not load users."
-      state.usersErrorDetails.value = buildRequestDebugInfo(`${API_BASE_URL}/app_users`, "GET", error)
-    } finally {
-      state.isLoadingUsers.value = false
     }
   }
 
@@ -176,7 +129,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       state.triggerSuccessPulse("create-job")
       state.showFeedback("Quest created.", "success")
       state.closeCreateJobDialog()
-      await fetchQuests()
+      await refreshDashboardData()
     } catch {
       state.showFeedback("Could not create quest.", "error")
     }
@@ -184,11 +137,19 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
 
   const loadApplicationsForQuest = async (questId: number) => {
     try {
-      state.applicationsByQuestId.value[questId] = await sidequestApi.getQuestApplications(questId)
+      state.applicationsByQuestId.value[questId] = await sidequestApi.getQuestApplicationsView(
+        questId,
+        !!state.showAllApplicationsQuestIds.value[questId]
+      )
     } catch {
-      state.applicationsByQuestId.value[questId] = []
+      delete state.applicationsByQuestId.value[questId]
       state.showFeedback("Could not load applications.", "error")
     }
+  }
+
+  const toggleApplicationRevealForQuest = async (questId: number) => {
+    state.showAllApplicationsQuestIds.value[questId] = !state.showAllApplicationsQuestIds.value[questId]
+    await loadApplicationsForQuest(questId)
   }
 
   const openQuestDialog = async (questId: number) => {
@@ -200,24 +161,17 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     state.applicationDialogId.value = null
     state.questDialogId.value = questId
 
-    if (canEditQuest(quest, state.isMyQuest(quest), isAdmin()) && quest.status === "OPEN") {
+    if (quest.allowedActions.includes("EDIT") && quest.status === "OPEN") {
       state.startEditingQuest(quest)
     } else {
       state.cancelEditingQuest()
     }
 
-    if (canEditQuest(quest, state.isMyQuest(quest), isAdmin())) {
+    if (quest.allowedActions.includes("VIEW_APPLICATIONS")) {
       await loadApplicationsForQuest(questId)
     }
 
-    const canApply = canApplyToQuest(
-      quest,
-      state.isMyQuest(quest),
-      isAdmin(),
-      state.hasAppliedToQuest(quest.id)
-    )
-
-    if (canApply) {
+    if (quest.allowedActions.includes("APPLY")) {
       const suggestedPrice = quest.awardAmount ? String(quest.awardAmount) : ""
       if (!state.proposedPrices.value[quest.id]?.trim()) {
         state.proposedPrices.value[quest.id] = suggestedPrice
@@ -261,7 +215,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
 
       state.applicationMessages.value[questId] = ""
       state.proposedPrices.value[questId] = ""
-      await fetchMyApplications()
+      await refreshDashboardData()
       state.showFeedback("Application sent. Returning to overview.", "success")
       state.closeQuestDialog()
       state.goToTab("overview")
@@ -299,7 +253,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await sidequestApi.approveApplication(questId, applicationId)
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Application approved.", "success")
-      await Promise.all([fetchQuests(), loadApplicationsForQuest(questId)])
+      await Promise.all([refreshDashboardData(), loadApplicationsForQuest(questId)])
       return true
     } catch {
       state.showFeedback("Could not approve application.", "error")
@@ -312,7 +266,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await sidequestApi.declineApplication(questId, applicationId)
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Application declined.", "success")
-      await Promise.all([fetchQuests(), loadApplicationsForQuest(questId)])
+      await Promise.all([refreshDashboardData(), loadApplicationsForQuest(questId)])
       return true
     } catch {
       state.showFeedback("Could not decline application.", "error")
@@ -324,7 +278,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     try {
       await sidequestApi.withdrawMyApplication(questId)
       state.showFeedback("Application withdrawn.", "success")
-      await fetchMyApplications()
+      await refreshDashboardData()
       return true
     } catch {
       state.showFeedback("Could not withdraw application.", "error")
@@ -337,7 +291,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await (action === "start" ? sidequestApi.startQuest(questId) : sidequestApi.completeQuest(questId))
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Quest updated.", "success")
-      await Promise.all([fetchQuests(), fetchMyApplications()])
+      await refreshDashboardData()
       return true
     } catch {
       state.showFeedback(`Could not ${action} quest.`, "error")
@@ -350,7 +304,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await sidequestApi.deleteQuest(questId)
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Quest deleted.", "success")
-      await Promise.all([fetchQuests(), fetchMyApplications()])
+      await refreshDashboardData()
       return true
     } catch {
       state.showFeedback("Could not delete quest.", "error")
@@ -380,7 +334,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       state.closeApplicationDialog()
       state.triggerSuccessPulse(`application-${applicationId}`)
       state.showFeedback("Application updated.", "success")
-      await fetchMyApplications()
+      await refreshDashboardData()
     } catch {
       state.showFeedback("Could not update application.", "error")
     }
@@ -426,7 +380,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       state.closeQuestDialog()
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Quest updated.", "success")
-      await fetchQuests()
+      await refreshDashboardData()
     } catch {
       state.showFeedback("Could not update quest.", "error")
     }
@@ -437,7 +391,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await sidequestApi.confirmQuestTermChange(questId)
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Quest term confirmed.", "success")
-      await Promise.all([fetchQuests(), loadApplicationsForQuest(questId)])
+      await Promise.all([refreshDashboardData(), loadApplicationsForQuest(questId)])
       return true
     } catch {
       state.showFeedback("Could not confirm quest term.", "error")
@@ -450,7 +404,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
       await sidequestApi.rejectQuestTermChange(questId)
       state.triggerSuccessPulse(`quest-${questId}`)
       state.showFeedback("Quest term change rejected.", "success")
-      await Promise.all([fetchQuests(), loadApplicationsForQuest(questId)])
+      await Promise.all([refreshDashboardData(), loadApplicationsForQuest(questId)])
       return true
     } catch {
       state.showFeedback("Could not reject quest term.", "error")
@@ -520,14 +474,8 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
 
   return {
     refreshDashboardData,
-    fetchQuests,
-    fetchMyApplications,
-    fetchNews,
-    fetchDashboardSummary,
-    fetchCircleOverview,
     markNewsAsRead,
     markNewsItemAsRead,
-    fetchAppUsers,
     createQuest,
     loadApplicationsForQuest,
     openQuestDialog,
@@ -547,6 +495,7 @@ export const useQuestDashboardActions = (state: QuestDashboardState) => {
     saveProfile,
     updateProfileAvatarFromFile,
     clearProfileAvatar,
+    toggleApplicationRevealForQuest,
     openCreateJobDialog: state.openCreateJobDialog,
     closeCreateJobDialog: state.closeCreateJobDialog,
     openFindWorkDialog: state.openFindWorkDialog,

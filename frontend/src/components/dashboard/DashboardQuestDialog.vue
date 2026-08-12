@@ -10,21 +10,12 @@ import {richTextHasContent} from "../../shared/richText.ts"
 import {useDialogActionState} from "../../composables/useDialogActionState.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 import {closeAfterDelay} from "../../lib/dialogFlow.ts"
-import {
-  canApplyToQuest,
-  canEditQuest,
-  canManageQuestExecution,
-  canRespondToTermChange as canRespondToTermChangeRule,
-  canShowQuestApplications,
-  isApprovedApplicantForQuest
-} from "../../lib/questAccess.ts"
 
 const props = defineProps<{
   dashboard: QuestDashboard
 }>()
 
 const quest = computed(() => props.dashboard.selectedQuestDialog)
-const isOwner = computed(() => quest.value ? props.dashboard.isMyQuest(quest.value) : false)
 const applications = computed(() => {
   if (!quest.value) {
     return []
@@ -45,16 +36,9 @@ const actionBanner = useDialogActionState(quest, () => {
 const actionMessage = actionBanner.message
 const actionMessageTone = actionBanner.tone
 
-const canEdit = computed(() => {
-  return canEditQuest(quest.value, isOwner.value, props.dashboard.isAdmin())
-})
+const canEdit = computed(() => quest.value?.allowedActions.includes("EDIT") ?? false)
 
-const canApply = computed(() => canApplyToQuest(
-  quest.value,
-  isOwner.value,
-  props.dashboard.isAdmin(),
-  quest.value ? props.dashboard.hasAppliedToQuest(quest.value.id) : false
-))
+const canApply = computed(() => quest.value?.allowedActions.includes("APPLY") ?? false)
 
 const applicationMessage = computed(() => {
   if (!quest.value) {
@@ -67,11 +51,7 @@ const applicationMessage = computed(() => {
 const canSubmitApplication = computed(() => richTextHasContent(applicationMessage.value))
 
 const hasApplied = computed(() => {
-  if (!quest.value) {
-    return false
-  }
-
-  return props.dashboard.hasAppliedToQuest(quest.value.id)
+  return quest.value?.hasApplied ?? false
 })
 
 const myApplication = computed(() => {
@@ -79,32 +59,17 @@ const myApplication = computed(() => {
     return null
   }
 
-  return props.dashboard.myApplications.find((application) => application.questId === quest.value?.id) ?? null
+  return props.dashboard.myApplications.find((application) => application.id === quest.value?.myApplicationId) ?? null
 })
 
-const approvedApplication = computed(() => {
-  return applications.value.find((application) => application.status === "APPROVED") ?? null
-})
+const featuredApplication = computed(() => quest.value ? props.dashboard.featuredApplicationForQuest(quest.value.id) : null)
 
-const isApprovedApplicant = computed(() => {
-  return isApprovedApplicantForQuest(quest.value, props.dashboard.myApplications)
-})
+const canShowApplications = computed(() => quest.value?.canViewApplications ?? false)
 
-const canShowApplications = computed(() => {
-  return canShowQuestApplications(quest.value, isOwner.value, props.dashboard.isAdmin())
-})
-
-const canRespondToTermChange = computed(() => {
-  return canRespondToTermChangeRule(quest.value, props.dashboard.isAdmin(), isApprovedApplicant.value)
-})
+const canRespondToTermChange = computed(() => quest.value?.allowedActions.includes("CONFIRM_TERM_CHANGE") ?? false)
 
 const canManageExecution = computed(() => {
-  return canManageQuestExecution(
-    quest.value,
-    isOwner.value,
-    props.dashboard.isAdmin(),
-    isApprovedApplicant.value
-  )
+  return quest.value?.allowedActions.includes("START") || quest.value?.allowedActions.includes("COMPLETE") || false
 })
 
 const beginEditQuest = () => {
@@ -355,8 +320,9 @@ const rejectTermChange = () => {
       <div v-else-if="quest.status !== 'CANCELLED'" class="stack dialog-sheet__section">
         <DashboardQuestApplications
           :dashboard="props.dashboard"
+          :quest-id="quest.id"
           :applications="applications"
-          :approved-application="approvedApplication"
+          :featured-application="featuredApplication"
           :can-show-applications="canShowApplications"
           @approve="approveApplication"
           @decline="declineApplication"
@@ -390,7 +356,7 @@ const rejectTermChange = () => {
         </div>
       </div>
 
-      <div v-if="canEdit && !isEditing" class="dialog-sheet__footer">
+      <div v-if="quest.allowedActions.includes('DELETE') && !isEditing" class="dialog-sheet__footer">
         <button class="button button--danger" type="button" :disabled="isDeleting" @click="closeQuest">Delete quest</button>
       </div>
 

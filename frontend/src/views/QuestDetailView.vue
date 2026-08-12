@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, ref, onMounted} from "vue"
+import {computed, onMounted, ref} from "vue"
 import {useQuestDetailPage} from "../composables/useQuestDetailPage.ts"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
 import UiRequestError from "../components/ui/UiRequestError.vue"
@@ -9,6 +9,7 @@ import {formatQuestTerm} from "../shared/questSchedule.ts"
 import {useTimedBanner} from "../composables/useTimedBanner.ts"
 import {formatApplicationStatus, formatQuestStatus, statusBadgeClass} from "../lib/questDashboardRules.ts"
 import {closeAfterDelay} from "../lib/dialogFlow.ts"
+import {currentUser} from "../auth.ts"
 
 const {
   router,
@@ -19,31 +20,93 @@ const {
   errorDetails,
   copiedDebug,
   isSaving,
-  isOwner,
-  isApprovedApplicant,
-  canManageExecution,
-  canRespondToTermChange,
-  myApplications,
+  review,
+  myApplication,
+  applicationsView,
   updateStatus,
   confirmQuestTermChange,
   rejectQuestTermChange,
   deleteQuest,
+  submitReview,
   copyDebugInfo,
   init
 } = useQuestDetailPage()
 
-const myApplication = computed(() => {
-  return quest ? myApplications.find((application) => application.questId === quest.id) ?? null : null
-})
-
 const isActionInProgress = ref(false)
 const showTermChangeDetails = ref(false)
+const reviewStars = ref(5)
+const reviewComment = ref("")
+const isSubmittingReview = ref(false)
 const actionBanner = useTimedBanner()
 const actionMessage = actionBanner.message
 const actionMessageTone = actionBanner.tone
 
+const isCompletedQuest = computed(() => quest?.status === "COMPLETED")
+const reviewTarget = computed(() => {
+  if (!quest || !currentUser.value || quest.status !== "COMPLETED") {
+    return null
+  }
+
+  const featuredApplication = applicationsView?.featuredApplication ?? null
+
+  if (quest.creatorId === currentUser.value.id && featuredApplication?.status === "APPROVED") {
+    return {
+      userId: featuredApplication.applicantId,
+      username: featuredApplication.applicantUsername,
+      roleLabel: "worker"
+    }
+  }
+
+  if (myApplication?.status === "APPROVED" && quest.creatorId !== currentUser.value.id) {
+    return {
+      userId: quest.creatorId,
+      username: quest.creatorUsername,
+      roleLabel: "employer"
+    }
+  }
+
+  return null
+})
+const canLeaveReview = computed(() => !!reviewTarget.value)
+const hasSubmittedReview = computed(() => !!review)
+const reviewPlaceholder = computed(() => {
+  if (!reviewTarget.value) {
+    return "Add a short comment."
+  }
+
+  return `Write a short comment about this ${reviewTarget.value.roleLabel}.`
+})
+
 const setActionMessage = (message: string, tone: "success" | "warning" = "success") => {
   actionBanner.show(message, tone)
+}
+
+const selectReviewStars = (stars: number) => {
+  reviewStars.value = stars
+}
+
+const handleSubmitReview = () => {
+  const target = reviewTarget.value
+  if (!target) {
+    return
+  }
+
+  isSubmittingReview.value = true
+  setActionMessage("Saving review...", "warning")
+
+  void (async () => {
+    const saved = await submitReview(target.userId, reviewStars.value, reviewComment.value)
+    if (!saved) {
+      isSubmittingReview.value = false
+      return
+    }
+
+    setActionMessage("Review saved.")
+    reviewComment.value = review?.comment ?? reviewComment.value.trim()
+    closeAfterDelay(() => {
+      isSubmittingReview.value = false
+    }, 900)
+  })()
 }
 
 const handleDeleteQuest = () => {
@@ -129,7 +192,7 @@ onMounted(init)
 
     <div v-if="isLoading" class="empty-state">
       Loading quest...
-      <div class="debug-inline mt-2">GET http://localhost:8080/quests/{{ questId }}</div>
+      <div class="debug-inline mt-2">GET http://localhost:8080/quests/{{ questId }}/detail</div>
     </div>
 
   <div v-if="quest" class="card">
@@ -219,7 +282,56 @@ onMounted(init)
         </div>
       </div>
 
-      <div v-if="canManageExecution" class="quest-footer">
+      <section v-if="isCompletedQuest" class="dialog-focus-card dialog-focus-card--soft mt-4">
+        <div class="dialog-focus-card__top u-row-between u-items-center u-wrap u-gap-8">
+          <div class="dialog-focus-card__section-title">Review</div>
+          <span v-if="hasSubmittedReview" class="badge badge--success">Saved</span>
+        </div>
+
+        <div v-if="canLeaveReview" class="review-form">
+          <div class="stack">
+            <strong>Rate {{ reviewTarget?.username }}</strong>
+            <div class="muted">This user appears here as {{ reviewTarget?.roleLabel }} on this quest.</div>
+          </div>
+
+          <div class="review-stars" role="radiogroup" aria-label="Rating">
+            <button
+              v-for="stars in 5"
+              :key="stars"
+              class="review-stars__button"
+              :class="{'review-stars__button--active': stars <= reviewStars}"
+              type="button"
+              :aria-pressed="stars === reviewStars"
+              @click="selectReviewStars(stars)"
+            >
+              ★
+            </button>
+          </div>
+
+          <label class="field">
+            <span class="label">Comment</span>
+            <textarea
+              v-model="reviewComment"
+              class="input review-form__textarea"
+              maxlength="500"
+              :placeholder="reviewPlaceholder"
+            />
+          </label>
+
+          <div class="button-row">
+            <button class="button" type="button" :disabled="isSaving || isSubmittingReview" @click="handleSubmitReview">
+              {{ hasSubmittedReview ? "Update review" : "Submit review" }}
+            </button>
+            <div class="muted">{{ reviewComment.length }}/500</div>
+          </div>
+        </div>
+
+        <div v-else class="empty-state empty-state--soft">
+          Reviews become available here for the employer and the approved worker after the quest is completed.
+        </div>
+      </section>
+
+      <div v-if="quest.allowedActions.includes('START') || quest.allowedActions.includes('COMPLETE')" class="quest-footer">
         <div class="divider"></div>
         <div class="button-row">
           <button
@@ -240,11 +352,11 @@ onMounted(init)
           >
             Mark complete
           </button>
-          <span v-if="isApprovedApplicant && !isOwner" class="muted">You are the approved applicant for this quest.</span>
+          <span v-if="quest.viewerRelation === 'APPROVED_APPLICANT'" class="muted">You are the approved applicant for this quest.</span>
         </div>
       </div>
 
-      <div v-if="isOwner && quest.status !== 'COMPLETED' && quest.status !== 'CANCELLED'" class="quest-footer">
+      <div v-if="quest.allowedActions.includes('DELETE')" class="quest-footer">
         <div class="divider"></div>
         <div class="button-row">
           <button class="button button--danger" type="button" :disabled="isSaving || isActionInProgress" @click="handleDeleteQuest">
@@ -253,7 +365,7 @@ onMounted(init)
         </div>
       </div>
 
-      <div v-if="canRespondToTermChange" class="quest-footer">
+      <div v-if="quest.allowedActions.includes('CONFIRM_TERM_CHANGE') || quest.allowedActions.includes('REJECT_TERM_CHANGE')" class="quest-footer">
         <div class="divider"></div>
         <div class="button-row">
           <button class="button button--secondary" type="button" :disabled="isSaving || isActionInProgress" @click="handleConfirmTermChange">

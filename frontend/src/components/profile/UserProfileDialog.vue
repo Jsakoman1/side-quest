@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from "vue"
-import {currentUser} from "../../auth.ts"
-import {sidequestApi, type AppUser, type CircleRelation, type CircleRequest} from "../../api/sidequestApi.ts"
+import {useRouter} from "vue-router"
+import {sidequestApi, type AppUser, type UserProfileView} from "../../api/sidequestApi.ts"
 import UiDialog from "../ui/UiDialog.vue"
 import UiStatusBanner from "../ui/UiStatusBanner.vue"
 import ProfileAvatar from "./ProfileAvatar.vue"
@@ -13,6 +13,7 @@ const props = defineProps<{
   open: boolean
   userId: number | null
 }>()
+const router = useRouter()
 
 const emit = defineEmits<{
   (event: "close"): void
@@ -21,51 +22,16 @@ const emit = defineEmits<{
 }>()
 
 const profile = ref<AppUser | null>(null)
-const myCircles = ref<CircleRequest[]>([])
-const incomingCircleRequests = ref<CircleRequest[]>([])
-const outgoingCircleRequests = ref<CircleRequest[]>([])
-const circleRelation = ref<CircleRelation | null>(null)
+const profileView = ref<UserProfileView | null>(null)
 const isLoading = ref(false)
 const isSending = ref(false)
 const error = ref("")
 const circleBanner = useTimedBanner(3500)
 
-const currentUserId = computed(() => currentUser.value?.id ?? null)
-const isOwnProfile = computed(() => currentUser.value?.id === profile.value?.id)
-const isCircle = computed(() => {
-  if (!profile.value || !currentUser.value) {
-    return false
-  }
-
-  return myCircles.value.some((circle) => {
-    const otherUserId = circle.requesterId === currentUserId.value ? circle.recipientId : circle.requesterId
-    return otherUserId === profile.value?.id
-  })
-})
-const hasIncomingRequestFromProfile = computed(() => incomingCircleRequests.value.some((request) => request.requesterId === profile.value?.id))
-const hasOutgoingRequestToProfile = computed(() => outgoingCircleRequests.value.some((request) => request.recipientId === profile.value?.id))
-const isBlocked = computed(() => circleRelation.value?.relationStatus === "BLOCKED")
-const canUnblock = computed(() => !!(isBlocked.value && circleRelation.value?.blockedByCurrentUser))
-
-const actionLabel = computed(() => {
-  if (isBlocked.value) {
-    return canUnblock.value ? "Unblock" : "Blocked"
-  }
-
-  if (isCircle.value) {
-    return "Connected"
-  }
-
-  if (hasOutgoingRequestToProfile.value) {
-    return "Invite sent"
-  }
-
-  if (hasIncomingRequestFromProfile.value) {
-    return "Open circles"
-  }
-
-  return "Send invite"
-})
+const isOwnProfile = computed(() => profileView.value?.ownProfile ?? false)
+const primaryAction = computed(() => profileView.value?.primaryAction ?? null)
+const showBlockAction = computed(() => profileView.value?.showBlockAction ?? false)
+const blockActionEnabled = computed(() => profileView.value?.blockActionEnabled ?? false)
 const bannerMessage = computed(() => circleBanner.message.value)
 const bannerTone = computed(() => circleBanner.tone.value)
 
@@ -73,26 +39,14 @@ const showMessage = (message: string, tone: "success" | "warning" = "success") =
   circleBanner.show(message, tone)
 }
 
-const loadCircleRelations = async () => {
-  if (!currentUser.value || isOwnProfile.value || !profile.value) {
-    myCircles.value = []
-    incomingCircleRequests.value = []
-    outgoingCircleRequests.value = []
-    circleRelation.value = null
+const loadProfileView = async () => {
+  if (!props.userId) {
     return
   }
 
-  const [circles, incoming, outgoing, relation] = await Promise.all([
-    sidequestApi.getMyCircles(),
-    sidequestApi.getIncomingCircleRequests(),
-    sidequestApi.getOutgoingCircleRequests(),
-    sidequestApi.getCircleRelation(profile.value.id)
-  ])
-
-  myCircles.value = circles
-  incomingCircleRequests.value = incoming
-  outgoingCircleRequests.value = outgoing
-  circleRelation.value = relation
+  const response = await sidequestApi.getUserProfileView(props.userId)
+  profileView.value = response
+  profile.value = response.profile
 }
 
 const loadProfile = async () => {
@@ -104,10 +58,10 @@ const loadProfile = async () => {
   error.value = ""
 
   try {
-    profile.value = await sidequestApi.getAppUser(props.userId)
-    await loadCircleRelations()
+    await loadProfileView()
   } catch {
     profile.value = null
+    profileView.value = null
     error.value = "Could not load profile."
   } finally {
     isLoading.value = false
@@ -123,7 +77,7 @@ const sendInvite = async () => {
   try {
     await sidequestApi.createCircleRequest({recipientId: profile.value.id})
     showMessage("Connection invite sent.")
-    await loadCircleRelations()
+    await loadProfileView()
   } catch {
     showMessage("Could not send connection invite.", "warning")
   } finally {
@@ -140,7 +94,7 @@ const blockProfile = async () => {
   try {
     await sidequestApi.blockCircleUser({blockedUserId: profile.value.id})
     showMessage("User blocked.")
-    await loadCircleRelations()
+    await loadProfileView()
   } catch {
     showMessage("Could not block user.", "warning")
   } finally {
@@ -157,7 +111,7 @@ const unblockProfile = async () => {
   try {
     await sidequestApi.unblockCircleUser(profile.value.id)
     showMessage("User unblocked.")
-    await loadCircleRelations()
+    await loadProfileView()
   } catch {
     showMessage("Could not unblock user.", "warning")
   } finally {
@@ -166,29 +120,29 @@ const unblockProfile = async () => {
 }
 
 const handlePrimaryAction = () => {
-  if (isOwnProfile.value) {
-    emit("editProfile")
-    return
-  }
-
-  if (isBlocked.value && canUnblock.value) {
-    void unblockProfile()
-    return
-  }
-
-  if (hasIncomingRequestFromProfile.value) {
-    emit("close")
-    return
-  }
-
-  if (!isCircle.value && !hasOutgoingRequestToProfile.value) {
-    void sendInvite()
+  switch (primaryAction.value?.type) {
+    case "EDIT_PROFILE":
+      emit("editProfile")
+      return
+    case "UNBLOCK":
+      void unblockProfile()
+      return
+    case "OPEN_CIRCLES":
+      emit("close")
+      void router.push("/circles")
+      return
+    case "SEND_INVITE":
+      void sendInvite()
+      return
+    default:
+      return
   }
 }
 
 watch(() => [props.open, props.userId] as const, () => {
   if (!props.open) {
     profile.value = null
+    profileView.value = null
     error.value = ""
     return
   }
@@ -229,14 +183,14 @@ watch(() => [props.open, props.userId] as const, () => {
           <ProfileBio :text="profile.profileDescription" placeholder="No profile description yet." />
 
           <div class="profile-dialog-card__actions">
-            <button class="button" type="button" :disabled="isSending || (!isOwnProfile && (isCircle || hasOutgoingRequestToProfile || (isBlocked && !canUnblock)))" @click="handlePrimaryAction">
-              {{ isOwnProfile ? "Edit profile" : actionLabel }}
+            <button class="button" type="button" :disabled="isSending || !primaryAction?.enabled" @click="handlePrimaryAction">
+              {{ primaryAction?.label ?? "Edit profile" }}
             </button>
             <button
-              v-if="!isOwnProfile && !isBlocked"
+              v-if="showBlockAction"
               class="button button--secondary"
               type="button"
-              :disabled="isSending"
+              :disabled="isSending || !blockActionEnabled"
               @click="blockProfile"
             >
               Block

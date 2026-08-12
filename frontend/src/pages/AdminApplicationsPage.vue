@@ -1,52 +1,49 @@
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue"
+import {onMounted, ref, watch} from "vue"
 import {useRouter} from "vue-router"
 import AdminShellHeader from "../components/admin/AdminShellHeader.vue"
 import UiToast from "../components/ui/UiToast.vue"
+import UiPagination from "../components/ui/UiPagination.vue"
 import {logoutUser} from "../auth.ts"
 import {sidequestApi, type QuestApplication} from "../api/sidequestApi.ts"
 import {formatApplicationStatus, statusBadgeClass} from "../lib/questDashboardRules.ts"
 import {formatInstantForDisplay, formatQuestTerm} from "../shared/questSchedule.ts"
 import type {QuestApplicationStatus} from "../shared/sidequestDomain.ts"
 import {normalizeSearchQuery} from "../lib/searchQuery.ts"
+import {usePaginatedResults} from "../composables/usePaginatedResults.ts"
 
 const router = useRouter()
-const applications = ref<QuestApplication[]>([])
+const itemsPerPage = 20
+const results = usePaginatedResults<QuestApplication>(itemsPerPage)
+const applications = results.items
 const isLoading = ref(false)
 const error = ref("")
 const searchQuery = ref("")
 const statusFilter = ref<QuestApplicationStatus | "ALL">("ALL")
 const feedback = ref("")
+const totalItems = results.totalItems
+const totalPages = results.totalPages
+const currentPage = results.currentPage
+const hasPreviousPage = results.hasPreviousPage
+const hasNextPage = results.hasNextPage
+const pageStart = results.pageStart
+const pageEnd = results.pageEnd
 
-const filteredApplications = computed(() => {
-  const query = normalizeSearchQuery(searchQuery.value).toLowerCase()
-  return applications.value.filter((application) => {
-    if (statusFilter.value !== "ALL" && application.status !== statusFilter.value) {
-      return false
-    }
-
-    if (!query) {
-      return true
-    }
-
-    return [
-      application.questTitle,
-      application.applicantUsername,
-      application.questStatus,
-      application.status,
-      application.message
-    ].some((value) => value.toLowerCase().includes(query))
-  })
-})
-
-const loadApplications = async () => {
+const loadApplications = async (page = 1) => {
   isLoading.value = true
   error.value = ""
 
   try {
-    applications.value = await sidequestApi.getAdminApplications()
+    const response = await sidequestApi.getAdminApplications({
+      q: normalizeSearchQuery(searchQuery.value),
+      status: statusFilter.value,
+      page: Math.max(0, page - 1),
+      size: itemsPerPage
+    })
+    results.applyPage(response)
   } catch {
     error.value = "Could not load applications."
+    results.reset()
   } finally {
     isLoading.value = false
   }
@@ -84,6 +81,18 @@ const declineApplication = async (application: QuestApplication) => {
     feedback.value = "Could not decline application."
   }
 }
+
+const previousPage = () => {
+  void results.previousPage(loadApplications)
+}
+
+const nextPage = () => {
+  void results.nextPage(loadApplications)
+}
+
+watch([searchQuery, statusFilter], () => {
+  void loadApplications(1)
+})
 
 onMounted(() => {
   void loadApplications()
@@ -123,9 +132,18 @@ onMounted(() => {
 
           <div v-if="isLoading" class="empty-state">Loading applications...</div>
           <div v-else-if="error" class="alert alert--error">{{ error }}</div>
-          <div v-else-if="!filteredApplications.length" class="empty-state">No applications match this search.</div>
+          <div v-else-if="!applications.length" class="empty-state">No applications match this search.</div>
 
           <div v-else class="admin-table-shell">
+            <UiPagination
+              class="mb-4"
+              :label="`Showing ${pageStart}-${pageEnd} of ${totalItems}`"
+              :has-previous="hasPreviousPage"
+              :has-next="hasNextPage"
+              @previous="previousPage"
+              @next="nextPage"
+            />
+
             <table class="admin-table">
               <thead>
                 <tr>
@@ -141,7 +159,7 @@ onMounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="application in filteredApplications" :key="application.id">
+                <tr v-for="application in applications" :key="application.id">
                   <td>
                     <strong>{{ application.questTitle }}</strong>
                   </td>
@@ -165,6 +183,16 @@ onMounted(() => {
                 </tr>
               </tbody>
             </table>
+
+            <UiPagination
+              v-if="totalPages > 1"
+              class="mt-4"
+              :label="`Page ${currentPage} of ${totalPages}`"
+              :has-previous="hasPreviousPage"
+              :has-next="hasNextPage"
+              @previous="previousPage"
+              @next="nextPage"
+            />
           </div>
         </article>
       </main>

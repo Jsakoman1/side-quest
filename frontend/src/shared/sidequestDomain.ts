@@ -3,8 +3,20 @@ const values = <T extends readonly string[]>(...items: T) => items
 const APP_USER_ROLES = values("USER", "ADMIN")
 const QUEST_AUDIENCES = values("CIRCLES", "EVERYONE")
 const QUEST_STATUSES = values("OPEN", "ASSIGNED", "WAITING_CONFIRMATION", "IN_PROGRESS", "COMPLETED", "CANCELLED")
+const QUEST_VIEWER_RELATIONS = values("OWNER", "ADMIN", "APPROVED_APPLICANT", "APPLICANT", "VIEWER")
+const QUEST_ALLOWED_ACTIONS = values(
+  "EDIT",
+  "APPLY",
+  "VIEW_APPLICATIONS",
+  "START",
+  "COMPLETE",
+  "CONFIRM_TERM_CHANGE",
+  "REJECT_TERM_CHANGE",
+  "DELETE"
+)
 const QUEST_APPLICATION_STATUSES = values("PENDING", "APPROVED", "DECLINED", "WITHDRAWN")
 const CIRCLE_RELATION_STATUSES = values("NONE", "CIRCLE", "INCOMING_REQUEST", "OUTGOING_REQUEST", "BLOCKED")
+const REVIEW_ROLES = values("EMPLOYER", "WORKER")
 const QUEST_NEWS_TYPES = values(
   "APPLICATION_CREATED",
   "APPLICATION_UPDATED",
@@ -27,8 +39,11 @@ const QUEST_SORT_MODES = values("recommended", "newest", "highest")
 export type AppUserRole = typeof APP_USER_ROLES[number]
 export type QuestAudience = typeof QUEST_AUDIENCES[number]
 export type QuestStatus = typeof QUEST_STATUSES[number]
+export type QuestViewerRelation = typeof QUEST_VIEWER_RELATIONS[number]
+export type QuestAllowedAction = typeof QUEST_ALLOWED_ACTIONS[number]
 export type QuestApplicationStatus = typeof QUEST_APPLICATION_STATUSES[number]
 export type CircleRelationStatus = typeof CIRCLE_RELATION_STATUSES[number]
+export type ReviewRole = typeof REVIEW_ROLES[number]
 export type QuestNewsType = typeof QUEST_NEWS_TYPES[number]
 export type DashboardTab = typeof DASHBOARD_TABS[number]
 export type OverviewFocus = typeof OVERVIEW_FOCUSES[number]

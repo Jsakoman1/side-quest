@@ -6,8 +6,9 @@ import {richTextHasContent} from "../../shared/richText.ts"
 
 defineProps<{
   dashboard: QuestDashboard
+  questId: number
   applications: QuestApplication[]
-  approvedApplication: QuestApplication | null
+  featuredApplication: QuestApplication | null
   canShowApplications: boolean
 }>()
 
@@ -18,17 +19,17 @@ defineEmits<{
 </script>
 
 <template>
-  <div v-if="approvedApplication" class="dialog-application-card dialog-application-card--selected">
+  <div v-if="featuredApplication" class="dialog-application-card dialog-application-card--selected">
     <div class="dialog-application-card__top">
-      <button class="dialog-inline-link" type="button" @click="dashboard.openUserProfileDialog(approvedApplication.applicantId)">
-        {{ approvedApplication.applicantUsername }}
+      <button class="dialog-inline-link" type="button" @click="dashboard.openUserProfileDialog(featuredApplication.applicantId)">
+        {{ featuredApplication.applicantUsername }}
       </button>
     </div>
-    <div class="dialog-application-card__price">$ {{ approvedApplication.proposedPrice }}</div>
-    <ProfileBio v-if="richTextHasContent(approvedApplication.message)" class="dialog-application-card__message" :text="approvedApplication.message" />
+    <div class="dialog-application-card__price">$ {{ featuredApplication.proposedPrice }}</div>
+    <ProfileBio v-if="richTextHasContent(featuredApplication.message)" class="dialog-application-card__message" :text="featuredApplication.message" />
   </div>
 
-  <div v-else-if="canShowApplications" class="stack dialog-sheet__applications">
+  <div v-if="canShowApplications" class="stack dialog-sheet__applications">
     <div class="dialog-sheet__section-title">Applications</div>
     <div v-if="applications.length" class="stack">
       <div v-for="application in applications" :key="application.id" class="dialog-application-card">
@@ -49,5 +50,14 @@ defineEmits<{
       </div>
     </div>
     <div v-else class="empty-state">Nothing here yet.</div>
+  </div>
+
+  <div v-if="dashboard.canRevealHiddenApplicationsForQuest(questId)" class="button-row">
+    <button class="button button--secondary" type="button" @click="dashboard.toggleApplicationRevealForQuest(questId)">
+      {{ dashboard.applicationRevealLabel(questId) }}
+      <span v-if="dashboard.hiddenApplicationsCountForQuest(questId) > 0">
+        ({{ dashboard.hiddenApplicationsCountForQuest(questId) }})
+      </span>
+    </button>
   </div>
 </template>

@@ -1,10 +1,10 @@
 import {watch, type WatchSource} from "vue"
-import {sidequestApi, type Quest} from "../api/sidequestApi.ts"
+import type {Quest, QuestListResponse} from "../api/sidequestApi.ts"
 import {usePaginatedResults} from "./usePaginatedResults.ts"
 
 export const useQuestSearchResults = (
   itemsPerPage: number,
-  buildParams: (page: number) => Record<string, string | number | boolean>
+  loadPage: (page: number) => Promise<QuestListResponse>
 ) => {
   const results = usePaginatedResults<Quest>(itemsPerPage)
 
@@ -12,7 +12,7 @@ export const useQuestSearchResults = (
     results.isLoading.value = true
 
     try {
-      const response = await sidequestApi.searchQuests(buildParams(Math.max(0, page - 1)))
+      const response = await loadPage(Math.max(0, page - 1))
       results.applyPage(response)
     } catch {
       results.reset()

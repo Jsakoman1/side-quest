@@ -8,6 +8,7 @@ import com.sidequest.sidequest.model.AppUserRole;
 import com.sidequest.sidequest.repository.AppUserRepository;
 import com.sidequest.sidequest.security.JwtService;
 import com.sidequest.sidequest.service.ServiceErrors;
+import com.sidequest.sidequest.service.RichTextInputValidator;
 import com.sidequest.sidequest.service.UserInputNormalizer;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -69,7 +70,7 @@ public class AuthController {
                 appUser.getId(),
                 appUser.getEmail(),
                 appUser.getUsername(),
-                appUser.getProfileDescription(),
+                RichTextInputValidator.sanitize(appUser.getProfileDescription()),
                 appUser.getProfileAvatarDataUrl(),
                 appUser.getCreatedAt(),
                 resolveRoleName(appUser),

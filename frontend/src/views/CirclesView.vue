@@ -9,7 +9,14 @@ import ProfileBio from "../components/profile/ProfileBio.vue"
 import UserProfileDialog from "../components/profile/UserProfileDialog.vue"
 import UiPagination from "../components/ui/UiPagination.vue"
 import UiStatusBanner from "../components/ui/UiStatusBanner.vue"
-import {sidequestApi, type CircleCandidate, type CircleContact, type CircleRequest, type CircleGroup} from "../api/sidequestApi.ts"
+import {
+  sidequestApi,
+  type CircleCandidate,
+  type CircleContact,
+  type CircleContactListResponse,
+  type CircleGroup,
+  type CircleRequestListResponse
+} from "../api/sidequestApi.ts"
 import {logoutUser} from "../auth.ts"
 import {useQuestDashboard} from "../composables/useQuestDashboard.ts"
 import {useTimedBanner} from "../composables/useTimedBanner.ts"
@@ -22,10 +29,14 @@ const pageSize = 8
 const inviteCandidates = ref<CircleCandidate[]>([])
 const searchResults = ref<CircleCandidate[]>([])
 const circles = ref<CircleGroup[]>([])
-const connections = ref<CircleContact[]>([])
-const incomingRequests = ref<CircleRequest[]>([])
-const outgoingRequests = ref<CircleRequest[]>([])
+const connectionsPageData = ref<CircleContactListResponse | null>(null)
+const incomingPageData = ref<CircleRequestListResponse | null>(null)
+const outgoingPageData = ref<CircleRequestListResponse | null>(null)
 const selectedCircleIdsByUserId = ref<Record<number, number[]>>({})
+const overviewConnectionCount = ref(0)
+const overviewUnassignedConnectionCount = ref(0)
+const overviewIncomingRequestCount = ref(0)
+const overviewOutgoingRequestCount = ref(0)
 const searchQuery = ref("")
 const newCircleName = ref("")
 const activeCircleFilter = ref<number | "all" | "unassigned">("all")
@@ -44,10 +55,19 @@ const messageTone = circleBanner.tone
 const normalizedSearchQuery = computed(() => normalizeSearchQuery(searchQuery.value).toLowerCase())
 const searchHasQuery = computed(() => hasSearchQuery(searchQuery.value))
 const circlesCount = computed(() => circles.value.length)
-const connectionsCount = computed(() => connections.value.length)
-const incomingCount = computed(() => incomingRequests.value.length)
-const outgoingCount = computed(() => outgoingRequests.value.length)
+const connectionsCount = computed(() => overviewConnectionCount.value)
+const incomingCount = computed(() => overviewIncomingRequestCount.value)
+const outgoingCount = computed(() => overviewOutgoingRequestCount.value)
 const suggestions = computed(() => searchHasQuery.value ? searchResults.value : inviteCandidates.value)
+const connectionsItems = computed(() => connectionsPageData.value?.items ?? [])
+const connectionsPages = computed(() => connectionsPageData.value?.totalPages ?? 1)
+const connectionsTotalItems = computed(() => connectionsPageData.value?.totalItems ?? 0)
+const incomingItems = computed(() => incomingPageData.value?.items ?? [])
+const incomingPages = computed(() => incomingPageData.value?.totalPages ?? 1)
+const incomingTotalItems = computed(() => incomingPageData.value?.totalItems ?? 0)
+const outgoingItems = computed(() => outgoingPageData.value?.items ?? [])
+const outgoingPages = computed(() => outgoingPageData.value?.totalPages ?? 1)
+const outgoingTotalItems = computed(() => outgoingPageData.value?.totalItems ?? 0)
 const activeCircleName = computed(() => {
   if (activeCircleFilter.value === "all") {
     return "All connections"
@@ -59,6 +79,10 @@ const activeCircleName = computed(() => {
 
   return circles.value.find((circle) => circle.id === activeCircleFilter.value)?.name ?? "Selected circle"
 })
+const currentInboxItems = computed(() => inboxTab.value === "incoming" ? incomingItems.value : outgoingItems.value)
+const currentInboxPage = computed(() => inboxTab.value === "incoming" ? incomingPage.value : outgoingPage.value)
+const currentInboxPages = computed(() => inboxTab.value === "incoming" ? incomingPages.value : outgoingPages.value)
+const currentInboxTotal = computed(() => inboxTab.value === "incoming" ? incomingTotalItems.value : outgoingTotalItems.value)
 
 let searchTimeout: number | undefined
 
@@ -66,112 +90,109 @@ const showMessage = (text: string, tone: "success" | "warning" = "success") => {
   circleBanner.show(text, tone)
 }
 
-const paginateItems = <T>(items: T[], page: number, size: number) => {
-  const start = (page - 1) * size
-  return items.slice(start, start + size)
-}
-
-const getTotalPages = (totalItems: number, size: number) => Math.max(1, Math.ceil(totalItems / size))
-
 const loadOverview = async () => {
-  isLoading.value = true
-  error.value = ""
-
   try {
     const overview = await sidequestApi.getCircleOverview()
-    circles.value = overview.circles
-    connections.value = overview.connections
-    incomingRequests.value = overview.incomingRequests
-    outgoingRequests.value = overview.outgoingRequests
-    inviteCandidates.value = overview.inviteCandidates
-    selectedCircleIdsByUserId.value = Object.fromEntries(
-      overview.connections.map((connection) => [connection.userId, [...connection.circleIds]])
-    )
+    overviewConnectionCount.value = overview.connectionCount
+    overviewUnassignedConnectionCount.value = overview.unassignedConnectionCount
+    overviewIncomingRequestCount.value = overview.incomingRequestCount
+    overviewOutgoingRequestCount.value = overview.outgoingRequestCount
   } catch {
     error.value = "Could not load circles."
-  } finally {
-    isLoading.value = false
   }
 }
 
-const loadSearchResults = async (query: string) => {
-  const trimmedQuery = normalizeSearchQuery(query)
-  if (trimmedQuery.length < 2) {
-    isSearching.value = false
-    searchResults.value = []
-    return
+const loadCircles = async () => {
+  try {
+    circles.value = await sidequestApi.getCircleGroups()
+  } catch {
+    error.value = "Could not load circles."
   }
+}
 
+const loadConnectionsPage = async () => {
+  const query = searchHasQuery.value ? normalizedSearchQuery.value : undefined
+  const circleId = activeCircleFilter.value === "all" || activeCircleFilter.value === "unassigned"
+    ? undefined
+    : activeCircleFilter.value
+  const unassigned = activeCircleFilter.value === "unassigned"
+
+  try {
+    connectionsPageData.value = await sidequestApi.getCircleConnectionsPage({
+      q: query,
+      circleId,
+      unassigned,
+      page: connectionsPage.value - 1,
+      size: pageSize
+    })
+  } catch {
+    error.value = "Could not load connections."
+  }
+}
+
+const loadInboxPage = async () => {
+  const query = searchHasQuery.value ? normalizedSearchQuery.value : undefined
+
+  try {
+    const [incomingResponse, outgoingResponse] = await Promise.all([
+      sidequestApi.getIncomingCircleRequestsPage({
+        q: query,
+        page: incomingPage.value - 1,
+        size: pageSize
+      }),
+      sidequestApi.getOutgoingCircleRequestsPage({
+        q: query,
+        page: outgoingPage.value - 1,
+        size: pageSize
+      })
+    ])
+
+    incomingPageData.value = incomingResponse
+    outgoingPageData.value = outgoingResponse
+  } catch {
+    error.value = "Could not load requests."
+  }
+}
+
+const loadSuggestions = async () => {
   isSearching.value = true
   error.value = ""
 
   try {
-    searchResults.value = await sidequestApi.searchCircleUsers(trimmedQuery)
+    if (searchHasQuery.value) {
+      searchResults.value = (await sidequestApi.searchCircleUsersPage({
+        q: normalizedSearchQuery.value,
+        page: 0,
+        size: 12
+      })).items
+      return
+    }
+
+    inviteCandidates.value = (await sidequestApi.getInviteCandidatesPage({
+      page: 0,
+      size: 12
+    })).items
+    searchResults.value = []
   } catch {
     error.value = "Could not search users."
     searchResults.value = []
+    inviteCandidates.value = []
   } finally {
     isSearching.value = false
   }
 }
 
-const matchesSearch = (values: Array<string | null | undefined>) => {
-  if (!searchHasQuery.value) {
-    return true
-  }
-
-  return values
-    .filter((value): value is string => !!value)
-    .join(" ")
-    .toLowerCase()
-    .includes(normalizedSearchQuery.value)
+const refreshCircleData = async () => {
+  await Promise.all([
+    loadConnectionsPage(),
+    loadInboxPage(),
+    loadSuggestions()
+  ])
 }
 
 const getSelectedCircleIds = (connection: CircleContact) => {
   return selectedCircleIdsByUserId.value[connection.userId] ?? connection.circleIds
 }
-
-const visibleConnections = computed(() => {
-  return connections.value
-    .filter((connection) => matchesSearch([
-      connection.username,
-      connection.profileDescription,
-      ...connection.circleNames
-    ]))
-    .filter((connection) => {
-      const selectedIds = getSelectedCircleIds(connection)
-
-      if (activeCircleFilter.value === "all") {
-        return true
-      }
-
-      if (activeCircleFilter.value === "unassigned") {
-        return selectedIds.length === 0
-      }
-
-      return selectedIds.includes(activeCircleFilter.value)
-    })
-})
-
-const visibleIncomingRequests = computed(() => {
-  return incomingRequests.value.filter((request) => matchesSearch([request.requesterUsername, request.requesterProfileDescription]))
-})
-
-const visibleOutgoingRequests = computed(() => {
-  return outgoingRequests.value.filter((request) => matchesSearch([request.recipientUsername, request.recipientProfileDescription]))
-})
-
-const connectionsPages = computed(() => getTotalPages(visibleConnections.value.length, pageSize))
-const incomingPages = computed(() => getTotalPages(visibleIncomingRequests.value.length, pageSize))
-const outgoingPages = computed(() => getTotalPages(visibleOutgoingRequests.value.length, pageSize))
-
-const pagedConnections = computed(() => paginateItems(visibleConnections.value, connectionsPage.value, pageSize))
-const pagedIncomingRequests = computed(() => paginateItems(visibleIncomingRequests.value, incomingPage.value, pageSize))
-const pagedOutgoingRequests = computed(() => paginateItems(visibleOutgoingRequests.value, outgoingPage.value, pageSize))
-const currentInboxItems = computed(() => inboxTab.value === "incoming" ? pagedIncomingRequests.value : pagedOutgoingRequests.value)
-const currentInboxPage = computed(() => inboxTab.value === "incoming" ? incomingPage.value : outgoingPage.value)
-const currentInboxPages = computed(() => inboxTab.value === "incoming" ? incomingPages.value : outgoingPages.value)
-const currentInboxTotal = computed(() => inboxTab.value === "incoming" ? visibleIncomingRequests.value.length : visibleOutgoingRequests.value.length)
 
 const createCircle = async () => {
   const name = normalizeSearchQuery(newCircleName.value)
@@ -185,7 +206,7 @@ const createCircle = async () => {
     await sidequestApi.createCircle({name})
     newCircleName.value = ""
     showMessage("Circle created.")
-    await loadOverview()
+    await Promise.all([loadOverview(), loadCircles(), refreshCircleData()])
   } catch {
     showMessage("Could not create circle.", "warning")
   } finally {
@@ -201,7 +222,7 @@ const deleteCircle = async (circleId: number) => {
     if (activeCircleFilter.value === circleId) {
       activeCircleFilter.value = "all"
     }
-    await loadOverview()
+    await Promise.all([loadOverview(), loadCircles(), refreshCircleData()])
   } catch {
     showMessage("Could not delete circle.", "warning")
   } finally {
@@ -241,13 +262,11 @@ const hasPendingCircleChanges = (connection: CircleContact) => {
 }
 
 const circleMemberCount = (circleId: number) => {
-  return connections.value.filter((connection) => getSelectedCircleIds(connection).includes(circleId)).length
+  return circles.value.find((circle) => circle.id === circleId)?.memberCount ?? 0
 }
 
 const circleMemberPreview = (circleId: number) => {
-  return connections.value
-    .filter((connection) => getSelectedCircleIds(connection).includes(circleId))
-    .slice(0, 3)
+  return circles.value.find((circle) => circle.id === circleId)?.members.slice(0, 3) ?? []
 }
 
 const saveConnectionCircles = async (connection: CircleContact) => {
@@ -257,7 +276,7 @@ const saveConnectionCircles = async (connection: CircleContact) => {
   try {
     await sidequestApi.updateConnectionCircles(connection.userId, {circleIds: nextCircleIds})
     showMessage("Circles updated.")
-    await loadOverview()
+    await Promise.all([loadOverview(), loadCircles(), refreshCircleData()])
   } catch {
     showMessage("Could not update circles.", "warning")
   } finally {
@@ -270,8 +289,7 @@ const sendRequest = async (id: number) => {
   try {
     await sidequestApi.createCircleRequest({recipientId: id})
     showMessage("Invite sent.")
-    await loadOverview()
-    await loadSearchResults(searchQuery.value)
+    await Promise.all([loadOverview(), refreshCircleData()])
   } catch {
     showMessage("Could not send invite.", "warning")
   } finally {
@@ -284,8 +302,7 @@ const blockUser = async (id: number) => {
   try {
     await sidequestApi.blockCircleUser({blockedUserId: id})
     showMessage("User blocked.")
-    await loadOverview()
-    await loadSearchResults(searchQuery.value)
+    await Promise.all([loadOverview(), refreshCircleData()])
   } catch {
     showMessage("Could not block user.", "warning")
   } finally {
@@ -298,8 +315,7 @@ const unblockUser = async (id: number) => {
   try {
     await sidequestApi.unblockCircleUser(id)
     showMessage("User unblocked.")
-    await loadOverview()
-    await loadSearchResults(searchQuery.value)
+    await Promise.all([loadOverview(), refreshCircleData()])
   } catch {
     showMessage("Could not unblock user.", "warning")
   } finally {
@@ -312,7 +328,7 @@ const acceptRequest = async (requestId: number) => {
   try {
     await sidequestApi.acceptCircleRequest(requestId)
     showMessage("Invite accepted.")
-    await loadOverview()
+    await Promise.all([loadOverview(), refreshCircleData()])
   } catch {
     showMessage("Could not accept invite.", "warning")
   } finally {
@@ -325,7 +341,7 @@ const removeRequest = async (requestId: number, tone: "success" | "warning" = "w
   try {
     await sidequestApi.deleteCircleRequest(requestId)
     showMessage("Connection updated.", tone)
-    await loadOverview()
+    await Promise.all([loadOverview(), refreshCircleData()])
   } catch {
     showMessage("Could not update connection.", "warning")
   } finally {
@@ -343,42 +359,60 @@ watch(searchQuery, (query) => {
   }
 
   searchTimeout = window.setTimeout(() => {
-    void loadSearchResults(query)
+    if (normalizeSearchQuery(query).length >= 2) {
+      void refreshCircleData()
+      return
+    }
+
+    void loadConnectionsPage()
+    void loadInboxPage()
+    void loadSuggestions()
   }, 250)
 })
 
-watch(() => visibleConnections.value.length, () => {
-  connectionsPage.value = Math.min(connectionsPage.value, connectionsPages.value)
-})
-
-watch(() => visibleIncomingRequests.value.length, () => {
-  incomingPage.value = Math.min(incomingPage.value, incomingPages.value)
-})
-
-watch(() => visibleOutgoingRequests.value.length, () => {
-  outgoingPage.value = Math.min(outgoingPage.value, outgoingPages.value)
+watch(activeCircleFilter, () => {
+  connectionsPage.value = 1
+  void loadConnectionsPage()
 })
 
 const previousInboxPage = () => {
   if (inboxTab.value === "incoming") {
     incomingPage.value = Math.max(1, incomingPage.value - 1)
+    void loadInboxPage()
     return
   }
 
   outgoingPage.value = Math.max(1, outgoingPage.value - 1)
+  void loadInboxPage()
 }
 
 const nextInboxPage = () => {
   if (inboxTab.value === "incoming") {
     incomingPage.value = Math.min(incomingPages.value, incomingPage.value + 1)
+    void loadInboxPage()
     return
   }
 
   outgoingPage.value = Math.min(outgoingPages.value, outgoingPage.value + 1)
+  void loadInboxPage()
+}
+
+const previousConnectionsPage = () => {
+  connectionsPage.value = Math.max(1, connectionsPage.value - 1)
+  void loadConnectionsPage()
+}
+
+const nextConnectionsPage = () => {
+  connectionsPage.value = Math.min(connectionsPages.value, connectionsPage.value + 1)
+  void loadConnectionsPage()
 }
 
 onMounted(() => {
-  void loadOverview()
+  isLoading.value = true
+  error.value = ""
+  void Promise.all([loadOverview(), loadCircles(), refreshCircleData()]).finally(() => {
+    isLoading.value = false
+  })
   void dashboard.init()
 })
 
@@ -473,7 +507,7 @@ const handleLogout = () => {
                     <strong>Unassigned</strong>
                     <div class="muted">People not placed anywhere yet</div>
                   </div>
-                  <span class="badge">{{ connections.filter((connection) => getSelectedCircleIds(connection).length === 0).length }}</span>
+                  <span class="badge">{{ overviewUnassignedConnectionCount }}</span>
                 </button>
 
                 <article
@@ -515,7 +549,7 @@ const handleLogout = () => {
               <div class="circles-panel__header circles-panel__header--main">
                 <div>
                   <h2 class="circles-panel__title">{{ activeCircleName }}</h2>
-                  <p class="circles-panel__subtitle">{{ visibleConnections.length }} matching connection{{ visibleConnections.length === 1 ? "" : "s" }}</p>
+                  <p class="circles-panel__subtitle">{{ connectionsTotalItems }} matching connection{{ connectionsTotalItems === 1 ? "" : "s" }}</p>
                 </div>
 
                 <label class="field circles-panel__search">
@@ -524,8 +558,8 @@ const handleLogout = () => {
                 </label>
               </div>
 
-              <div v-if="visibleConnections.length" class="circles-connection-list">
-                <article v-for="connection in pagedConnections" :key="connection.relationId" class="circles-connection-card">
+              <div v-if="connectionsItems.length" class="circles-connection-list">
+                <article v-for="connection in connectionsItems" :key="connection.relationId" class="circles-connection-card">
                   <div class="circles-connection-card__top">
                     <button class="profile-link profile-link--button" type="button" @click="dashboard.openUserProfileDialog(connection.userId)">
                       <ProfileAvatar :username="connection.username" :avatar-data-url="connection.profileAvatarDataUrl" :size="52" />
@@ -578,8 +612,8 @@ const handleLogout = () => {
                 :label="`Page ${connectionsPage} of ${connectionsPages}`"
                 :has-previous="connectionsPage > 1"
                 :has-next="connectionsPage < connectionsPages"
-                @previous="connectionsPage -= 1"
-                @next="connectionsPage += 1"
+                @previous="previousConnectionsPage"
+                @next="nextConnectionsPage"
               />
             </section>
 

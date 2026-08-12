@@ -6,6 +6,7 @@ import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestApplication;
 import com.sidequest.sidequest.model.QuestApplicationStatus;
+import com.sidequest.sidequest.service.RichTextInputValidator;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,7 +16,7 @@ public class QuestApplicationMgr {
         QuestApplication application = new QuestApplication();
         application.setQuest(quest);
         application.setApplicant(applicant);
-        application.setMessage(dto.getMessage() == null ? null : dto.getMessage().trim());
+        application.setMessage(RichTextInputValidator.sanitize(dto.getMessage()));
         application.setProposedPrice(dto.getProposedPrice());
         application.setStatus(QuestApplicationStatus.PENDING);
         return application;
@@ -38,9 +39,9 @@ public class QuestApplicationMgr {
                 .questTermFixed(application.getQuest().isTermFixed())
                 .applicantId(application.getApplicant().getId())
                 .applicantUsername(application.getApplicant().getUsername())
-                .applicantProfileDescription(application.getApplicant().getProfileDescription())
+                .applicantProfileDescription(RichTextInputValidator.sanitize(application.getApplicant().getProfileDescription()))
                 .applicantProfileAvatarDataUrl(application.getApplicant().getProfileAvatarDataUrl())
-                .message(application.getMessage())
+                .message(RichTextInputValidator.sanitize(application.getMessage()))
                 .proposedPrice(application.getProposedPrice())
                 .status(application.getStatus())
                 .createdAt(application.getCreatedAt())

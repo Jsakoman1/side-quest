@@ -3,9 +3,12 @@ package com.sidequest.sidequest.mapper;
 import com.sidequest.sidequest.dto.QuestRequestDTO;
 import com.sidequest.sidequest.dto.QuestResponseDTO;
 import com.sidequest.sidequest.dto.CircleSummaryDTO;
+import com.sidequest.sidequest.dto.QuestAllowedAction;
+import com.sidequest.sidequest.dto.QuestViewerRelation;
 import com.sidequest.sidequest.model.AppUser;
 import com.sidequest.sidequest.model.Quest;
 import com.sidequest.sidequest.model.QuestStatus;
+import com.sidequest.sidequest.service.RichTextInputValidator;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -22,10 +25,10 @@ public class QuestMgr {
                 .id(quest.getId())
                 .creatorId(quest.getCreator().getId())
                 .creatorUsername(quest.getCreator().getUsername())
-                .creatorProfileDescription(quest.getCreator().getProfileDescription())
+                .creatorProfileDescription(RichTextInputValidator.sanitize(quest.getCreator().getProfileDescription()))
                 .creatorProfileAvatarDataUrl(quest.getCreator().getProfileAvatarDataUrl())
                 .title(quest.getTitle())
-                .description(quest.getDescription())
+                .description(RichTextInputValidator.sanitize(quest.getDescription()))
                 .awardAmount(quest.getAwardAmount())
                 .assigneeTarget(quest.getAssigneeTarget())
                 .scheduledAt(quest.getScheduledAt())
@@ -44,7 +47,32 @@ public class QuestMgr {
                         .toList())
                 .images(List.copyOf(quest.getImages()))
                 .status(quest.getStatus())
+                .viewerRelation(QuestViewerRelation.VIEWER)
+                .allowedActions(List.of())
+                .hasApplied(false)
+                .myApplicationId(null)
+                .canViewApplications(false)
                 .build();
+    }
+
+    public QuestResponseDTO withViewerContext(
+            QuestResponseDTO dto,
+            QuestViewerRelation viewerRelation,
+            List<QuestAllowedAction> allowedActions,
+            boolean hasApplied,
+            Long myApplicationId,
+            boolean canViewApplications
+    ) {
+        if (dto == null) {
+            return null;
+        }
+
+        dto.setViewerRelation(viewerRelation);
+        dto.setAllowedActions(List.copyOf(allowedActions));
+        dto.setHasApplied(hasApplied);
+        dto.setMyApplicationId(myApplicationId);
+        dto.setCanViewApplications(canViewApplications);
+        return dto;
     }
 
     public Quest toEntity(QuestRequestDTO dto, AppUser creator) {
@@ -54,8 +82,8 @@ public class QuestMgr {
 
         Quest quest = new Quest();
         quest.setCreator(creator);
-        quest.setTitle(dto.getTitle());
-        quest.setDescription(dto.getDescription());
+        quest.setTitle(dto.getTitle() == null ? null : dto.getTitle().trim());
+        quest.setDescription(RichTextInputValidator.sanitize(dto.getDescription()));
         quest.setAwardAmount(dto.getAwardAmount());
         quest.setAssigneeTarget(dto.getAssigneeTarget() == null ? 1 : dto.getAssigneeTarget());
         quest.setScheduledAt(dto.getScheduledAt());

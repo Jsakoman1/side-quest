@@ -39,9 +39,8 @@ onMounted(() => {
         <UiRequestError :message="dashboard.applicationsError" :details="dashboard.applicationsErrorDetails" summary="Application request debug details" :copied="dashboard.copiedDebug" @copy="dashboard.copyDebugInfo(dashboard.applicationsErrorDetails)" />
 
         <div v-if="dashboard.isLoadingQuests || dashboard.isLoadingApplications" class="empty-state">
-          <div v-if="dashboard.isLoadingQuests">Loading quests...</div>
-          <div v-if="dashboard.isLoadingApplications">Loading applications...</div>
-          <div class="debug-inline mt-2">GET /quests | GET /quests/applications/me</div>
+          <div>Loading dashboard...</div>
+          <div class="debug-inline mt-2">GET /dashboard/me</div>
         </div>
 
         <DashboardAdmin :dashboard="dashboard" />

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import {computed, ref} from "vue"
 import DashboardSectionHeader from "./DashboardSectionHeader.vue"
+import {sidequestApi} from "../../api/sidequestApi.ts"
 import type {QuestDashboard} from "../../composables/useQuestDashboard.ts"
 import type {QuestAudience} from "../../shared/sidequestDomain.ts"
 import {normalizeSearchQuery} from "../../lib/searchQuery.ts"
-import {buildQuestSearchParams} from "../../lib/questSearch.ts"
 import {useQuestSearchResults} from "../../composables/useQuestSearchResults.ts"
 import UiPagination from "../ui/UiPagination.vue"
 import {richTextToPlainText} from "../../shared/richText.ts"
@@ -26,13 +26,11 @@ const audienceFilter = ref<QuestAudience | "ALL">("ALL")
 const dateFrom = ref("")
 const dateTo = ref("")
 const itemsPerPage = 10
-const {results: questResults, loadQuests, watchAndReload} = useQuestSearchResults(itemsPerPage, (page) => buildQuestSearchParams({
+const {results: questResults, loadQuests, watchAndReload} = useQuestSearchResults(itemsPerPage, (page) => sidequestApi.getQuestPreset("AVAILABLE", {
   q: normalizeSearchQuery(searchQuery.value),
-  status: "OPEN",
   audience: audienceFilter.value === "ALL" ? null : audienceFilter.value,
   dateFrom: dateFrom.value || null,
   dateTo: dateTo.value || null,
-  excludeMine: true,
   withImages: photoOnly.value || undefined,
   scheduledOnly: scheduledOnly.value || undefined,
   sort: sortMode.value,
